@@ -1,0 +1,13 @@
+# Evitar arquivos temporários do editor
+*.swp
+*.swo
+*.bak
+*~
+
+# Logs e arquivos gerados
+*.log
+*.tmp
+
+# Docker
+docker-compose.override.yml
+.env
