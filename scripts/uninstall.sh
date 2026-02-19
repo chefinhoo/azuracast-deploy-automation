@@ -1,6 +1,18 @@
 #!/bin/bash
-# uninstall.sh
-# Script para remover completamente AzuraCast + Nginx Proxy Manager + Docker
+# =========================================================
+# Script de remoção completa do AzuraCast + Nginx Proxy Manager
+# 
+# Copyright (c) 2026 Danilo Ramos
+# Licensed under MIT License (automation script only)
+# 
+# This script removes installations of:
+# - AzuraCast © AzuraCast Contributors (Apache 2.0)
+#   https://www.azuracast.com
+# - Nginx Proxy Manager © Jamie Curnow (MIT License)
+#   https://nginxproxymanager.com
+# - Docker © Docker, Inc. (Apache 2.0)
+#   https://www.docker.com
+# =========================================================
 
 set -euo pipefail
 

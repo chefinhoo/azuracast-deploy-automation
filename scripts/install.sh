@@ -2,6 +2,19 @@
 # =========================================================
 # Script de instalação AzuraCast + Nginx Proxy Manager
 # Multi-site compatível, ajusta automaticamente portas
+# 
+# Copyright (c) 2026 Danilo Ramos
+# Licensed under MIT License (automation script only)
+# 
+# This script installs the following third-party software:
+# - AzuraCast © AzuraCast Contributors (Apache 2.0)
+#   https://www.azuracast.com
+# - Nginx Proxy Manager © Jamie Curnow (MIT License)
+#   https://nginxproxymanager.com
+# - Docker © Docker, Inc. (Apache 2.0)
+#   https://www.docker.com
+# 
+# All third-party software is subject to their own licenses.
 # =========================================================
 
 set -e

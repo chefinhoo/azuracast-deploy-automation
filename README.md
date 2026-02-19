@@ -128,7 +128,54 @@ cd /var/azuracast
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+This project (automation scripts only) is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
+
+### ⚠️ Important Copyright Notice
+
+**This repository contains only automation scripts.** The following software components installed by these scripts are subject to their own licenses:
+
+- **AzuraCast** - Licensed under Apache License 2.0
+  - Copyright © AzuraCast Contributors
+  - https://github.com/AzuraCast/AzuraCast/blob/main/LICENSE.txt
+
+- **Nginx Proxy Manager** - Licensed under MIT License
+  - Copyright © Jamie Curnow
+  - https://github.com/NginxProxyManager/nginx-proxy-manager
+
+- **Docker** - Licensed under Apache License 2.0
+  - Copyright © Docker, Inc.
+  - https://www.docker.com/legal/docker-software-end-user-license-agreement/
+
+This project is **not affiliated with, endorsed by, or sponsored by** any of the above projects. All trademarks belong to their respective owners.
+
+## Credits & Acknowledgments
+
+This automation project is built upon excellent open-source software:
+
+### 🎵 AzuraCast
+- **Developers:** Buster "Silver Eagle" Neece and AzuraCast Contributors
+- **License:** Apache License 2.0
+- **Website:** https://www.azuracast.com
+- **Repository:** https://github.com/AzuraCast/AzuraCast
+- **Description:** A self-hosted web radio management suite
+
+### 🔧 Nginx Proxy Manager
+- **Developer:** Jamie Curnow
+- **License:** MIT License
+- **Website:** https://nginxproxymanager.com
+- **Repository:** https://github.com/NginxProxyManager/nginx-proxy-manager
+- **Description:** Docker container for managing Nginx proxy hosts with SSL
+
+### 🐳 Docker & Docker Compose
+- **Developer:** Docker, Inc.
+- **License:** Apache License 2.0
+- **Website:** https://www.docker.com
+- **Documentation:** https://docs.docker.com
+- **Description:** Platform for developing and running containerized applications
+
+### 🙏 Special Thanks
+
+A special thank you to all the contributors and maintainers of these projects. Without their incredible work, this automation tool would not be possible.
 
 ## Links
 
