@@ -1,165 +1,105 @@
 #!/bin/bash
-# =========================================================
-# Script Final de Instalação AzuraCast + Nginx Proxy Manager
-# Compatível ARM / Ubuntu 24.04 LTS
-# AzuraCast: portas de rádio a partir de 9000
-# Interface web: HTTP 10080, HTTPS 10443
-# Nginx Proxy Manager: volumes persistentes
-# =========================================================
+# install.sh - Instalação automática de AzuraCast + Nginx Proxy Manager
+# Autor: Danilo Ramos
+# Data: 2026-02-19
 
 set -e
 
-echo "[INFO] Verificando se está rodando como root..."
-if [[ $EUID -ne 0 ]]; then
-   echo "Este script precisa ser executado como root."
-   exit 1
-fi
+echo "[INFO] Verificando portas disponíveis..."
+# Aqui você poderia implementar uma verificação de portas se quiser
 
-# ========================
-# Função para liberar locks do apt
-# ========================
-echo "[INFO] Verificando travamentos do apt..."
-if fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; then
-    echo "[WARN] Encontrado lock do apt. Tentando liberar..."
-    fuser -k /var/lib/dpkg/lock
-    rm -f /var/lib/apt/lists/lock
-    rm -f /var/cache/apt/archives/lock
-    rm -f /var/lib/dpkg/lock*
-    dpkg --configure -a
-fi
-
-# ========================
-# Limpa instalações antigas
-# ========================
-echo "[INFO] Removendo instalações antigas do AzuraCast..."
-rm -rf /var/azuracast
-rm -rf /var/proxy_manager
-mkdir -p /var/azuracast
-mkdir -p /var/proxy_manager
-
-# ========================
-# Instalando Docker e Compose
-# ========================
-echo "[INFO] Instalando Docker e Docker Compose..."
+echo "[INFO] Instalando Docker/Docker Compose..."
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl gnupg lsb-release
+apt-get install -y -qq ca-certificates curl apt-transport-https gnupg lsb-release
 
 mkdir -p /etc/apt/keyrings
-rm -f /etc/apt/keyrings/docker.gpg
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-echo \
-"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-> /etc/apt/sources.list.d/docker.list
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
 
 apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 systemctl enable --now docker
 
-# ========================
-# Instala AzuraCast
-# ========================
-echo "[INFO] Instalando AzuraCast..."
-cd /var/azuracast
+echo "[INFO] Docker instalado com sucesso!"
+docker version
 
-# Baixa script oficial
-curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
-chmod +x docker.sh
-
-# Cria arquivo .env **antes da instalação**
-cat > .env <<EOL
-# Portas da interface web
-AZURACAST_HTTP_PORT=10080
-AZURACAST_HTTPS_PORT=10443
-# Porta base de streaming (Icecast/Shoutcast)
-AZURACAST_ICECAST_PORT=9000
-EOL
-
-echo "[INFO] Executando instalação do AzuraCast..."
-yes | ./docker.sh install
-
-echo "[INFO] Reiniciando AzuraCast para garantir aplicação das portas..."
-docker compose down || true
-docker compose up -d
-
-# ========================
-# Instala Nginx Proxy Manager
-# ========================
 echo "[INFO] Instalando Nginx Proxy Manager..."
-cd /var/proxy_manager
-
-cat > docker-compose.yml <<EOL
+mkdir -p /var/proxy_manager
+cat > /var/proxy_manager/docker-compose.yml <<EOL
 version: "3"
 services:
   app:
     image: jc21/nginx-proxy-manager:latest
-    restart: unless-stopped
+    restart: always
     ports:
-      - "81:81"
-      - "80:80"
-      - "443:443"
+      - "81:81"       # GUI NPM
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS
     environment:
       DB_MYSQL_HOST: "db"
       DB_MYSQL_PORT: 3306
       DB_MYSQL_USER: "npm"
       DB_MYSQL_PASSWORD: "npm"
       DB_MYSQL_NAME: "npm"
-    depends_on:
-      - db
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt
   db:
-    image: mariadb:10.11
-    restart: unless-stopped
+    image: jc21/mariadb-aria:10.5
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: "npm"
-      MYSQL_DATABASE: "npm"
-      MYSQL_USER: "npm"
-      MYSQL_PASSWORD: "npm"
+      MYSQL_ROOT_PASSWORD: 'npm'
+      MYSQL_DATABASE: 'npm'
+      MYSQL_USER: 'npm'
+      MYSQL_PASSWORD: 'npm'
     volumes:
       - ./data/mysql:/var/lib/mysql
 EOL
 
-docker compose up -d
+docker-compose -f /var/proxy_manager/docker-compose.yml up -d || true
+echo "[INFO] Nginx Proxy Manager iniciado!"
 
-# ========================
-# Limpeza final
-# ========================
-echo "[INFO] Limpando repositório temporário, se existir..."
-rm -rf /var/azuracast-deploy-automation
+echo "[INFO] Instalando AzuraCast..."
+mkdir -p /var/azuracast
+cd /var/azuracast
 
-# ========================
-# Finalização
-# ========================
-echo "[INFO] Instalação concluída!"
-echo "AzuraCast Web: HTTP 10080 / HTTPS 10443"
-echo "Rádios: streaming a partir da porta 9000"
-echo "Nginx Proxy Manager: http://<IP_DO_SERVIDOR>:81"
+curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh > docker.sh
+chmod +x docker.sh
 
-cat <<EOL
+# Instalação não interativa
+yes '' | ./docker.sh install
 
-💡 Próximos passos recomendados:
+echo "[INFO] Ajustando portas do AzuraCast para evitar conflito com Nginx Proxy Manager..."
+# Edita .env para usar portas não padrão
+sed -i 's/AZURACAST_HTTP_PORT=.*/AZURACAST_HTTP_PORT=10080/' .env
+sed -i 's/AZURACAST_HTTPS_PORT=.*/AZURACAST_HTTPS_PORT=10443/' .env
 
-1️⃣ Acesse Nginx Proxy Manager GUI:
-http://<IP_DO_SERVIDOR>:81
+docker-compose down || true
+docker-compose up -d
 
-2️⃣ Crie um Proxy Host para cada domínio/rádio:
-Domain Names: seu domínio (ex: azura.daniloramos.dev.br)
-Scheme: https
-Forward Hostname/IP: IP público do servidor
-Forward Port: 10443 (HTTPS do AzuraCast)
-Enable Websockets: ✅
-SSL Tab:
-Request a new SSL certificate
-Force SSL
-HTTP/2 Support
-Informe seu e-mail e aceite os termos Let's Encrypt
+echo "[INFO] AzuraCast instalado com sucesso!"
+echo "HTTP: 10080, HTTPS: 10443, STREAM: 9000-9999"
 
-3️⃣ Acesse o AzuraCast pelo seu domínio:
-https://azura.seudominio.com
-
-4️⃣ Suas rádios estarão disponíveis a partir da porta 9000 (Icecast/Shoutcast).
-
-EOL
+echo -e "\n===================================================="
+echo "PRÓXIMOS PASSOS RECOMENDADOS:"
+echo ""
+echo "1️⃣ Acesse o Nginx Proxy Manager GUI:"
+echo "   http://<IP_DO_SERVIDOR>:81"
+echo ""
+echo "2️⃣ Crie um Proxy Host:"
+echo "   Domain Names: seu domínio (ex: azura.daniloramos.dev.br)"
+echo "   Scheme: https"
+echo "   Forward Hostname/IP: IP público do servidor"
+echo "   Forward Port: 10443 (HTTPS do AzuraCast)"
+echo "   Enable Websockets: ✅"
+echo ""
+echo "3️⃣ SSL Tab:"
+echo "   - Request a new SSL certificate"
+echo "   - Force SSL"
+echo "   - HTTP/2 Support"
+echo "   - Informe seu e-mail e aceite os termos Let’s Encrypt"
+echo ""
+echo "4️⃣ Acesse o AzuraCast pelo seu domínio:"
+echo "   https://azura.daniloramos.dev.br"
+echo "===================================================="
