@@ -1,86 +1,306 @@
 #!/bin/bash
-# install.sh - Instalação automática de AzuraCast + Nginx Proxy Manager
-# Autor: Danilo Ramos
-# Data: 2026-02-19
+# install.sh - Instalação automatizada AzuraCast + Nginx Proxy Manager (multi-site, ARM-ready)
 
 set -e
 
 echo "[INFO] Verificando portas disponíveis..."
-# Aqui você poderia implementar uma verificação de portas se quiser
+# AzuraCast default HTTP/HTTPS
+AZURACAST_HTTP=10080
+AZURACAST_HTTPS=10443
+STREAM_MIN=9000
+STREAM_MAX=9999
+
+# Nginx Proxy Manager default ports
+NPM_HTTP=80
+NPM_HTTPS=443
+NPM_GUI=81
 
 echo "[INFO] Instalando Docker/Docker Compose..."
+
+# Instala Docker (Ubuntu ARM)
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl apt-transport-https gnupg lsb-release
+apt-get install -y -qq ca-certificates curl gnupg lsb-release
 
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+    > /etc/apt/sources.list.d/docker.list
 
 apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-systemctl enable --now docker
-
-echo "[INFO] Docker instalado com sucesso!"
-docker version
+systemctl enable --now docker.service
 
 echo "[INFO] Instalando Nginx Proxy Manager..."
 mkdir -p /var/proxy_manager
-cat > /var/proxy_manager/docker-compose.yml <<EOL
+cd /var/proxy_manager
+
+# Cria docker-compose.yml do NPM com MariaDB ARM-friendly
+cat > docker-compose.yml <<EOF
 version: "3"
+
 services:
   app:
     image: jc21/nginx-proxy-manager:latest
     restart: always
     ports:
-      - "81:81"       # GUI NPM
-      - "80:80"       # HTTP
-      - "443:443"     # HTTPS
+      - "${NPM_HTTP}:80"
+      - "${NPM_GUI}:81"
+      - "${NPM_HTTPS}:443"
     environment:
-      DB_MYSQL_HOST: "db"
+      DB_MYSQL_HOST: db
       DB_MYSQL_PORT: 3306
-      DB_MYSQL_USER: "npm"
-      DB_MYSQL_PASSWORD: "npm"
-      DB_MYSQL_NAME: "npm"
+      DB_MYSQL_USER: npm
+      DB_MYSQL_PASSWORD: npm
+      DB_MYSQL_NAME: npm
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt
+    depends_on:
+      - db
+
   db:
-    image: jc21/mariadb-aria:10.5
+    image: yobasystems/alpine-mariadb:latest
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: 'npm'
-      MYSQL_DATABASE: 'npm'
-      MYSQL_USER: 'npm'
-      MYSQL_PASSWORD: 'npm'
+      MYSQL_ROOT_PASSWORD: npm
+      MYSQL_DATABASE: npm
+      MYSQL_USER: npm
+      MYSQL_PASSWORD: npm
     volumes:
-      - ./data/mysql:/var/lib/mysql
-EOL
+      - ./mysql:/var/lib/mysql
+EOF
 
-docker-compose -f /var/proxy_manager/docker-compose.yml up -d || true
+docker-compose up -d
+
 echo "[INFO] Nginx Proxy Manager iniciado!"
 
 echo "[INFO] Instalando AzuraCast..."
 mkdir -p /var/azuracast
 cd /var/azuracast
-
-curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh > docker.sh
+curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
 chmod +x docker.sh
 
-# Instalação não interativa
+echo "[INFO] Instalando Docker/Docker Compose do AzuraCast (se necessário)..."
+./docker.sh install-docker
+./docker.sh install-docker-compose
+
+# Configura portas do AzuraCast
+cat > .env <<EOF
+AZURACAST_HTTP_PORT=${AZURACAST_HTTP}
+AZURACAST_HTTPS_PORT=${AZURACAST_HTTPS}
+AZURACAST_RADIO_PORT_MIN=${STREAM_MIN}
+AZURACAST_RADIO_PORT_MAX=${STREAM_MAX}
+EOF
+
+echo "[INFO] Instalando AzuraCast em modo Docker..."
 yes '' | ./docker.sh install
 
-echo "[INFO] Ajustando portas do AzuraCast para evitar conflito com Nginx Proxy Manager..."
-# Edita .env para usar portas não padrão
-sed -i 's/AZURACAST_HTTP_PORT=.*/AZURACAST_HTTP_PORT=10080/' .env
-sed -i 's/AZURACAST_HTTPS_PORT=.*/AZURACAST_HTTPS_PORT=10443/' .env
+echo "[INFO] AzuraCast instalado com sucesso!"
+echo "HTTP: ${AZURACAST_HTTP}, HTTPS: ${AZURACAST_HTTPS}, STREAM: ${STREAM_MIN}-${STREAM_MAX}"
+echo "Configure um Proxy Host no Nginx Proxy Manager apontando para essas portas."
+#!/bin/bash
+# install.sh - Instalação automatizada AzuraCast + Nginx Proxy Manager (multi-site, ARM-ready)
 
-docker-compose down || true
+set -e
+
+echo "[INFO] Verificando portas disponíveis..."
+# AzuraCast default HTTP/HTTPS
+AZURACAST_HTTP=10080
+AZURACAST_HTTPS=10443
+STREAM_MIN=9000
+STREAM_MAX=9999
+
+# Nginx Proxy Manager default ports
+NPM_HTTP=80
+NPM_HTTPS=443
+NPM_GUI=81
+
+echo "[INFO] Instalando Docker/Docker Compose..."
+
+# Instala Docker (Ubuntu ARM)
+apt-get update -qq
+apt-get install -y -qq ca-certificates curl gnupg lsb-release
+
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+    > /etc/apt/sources.list.d/docker.list
+
+apt-get update -qq
+apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+systemctl enable --now docker.service
+
+echo "[INFO] Instalando Nginx Proxy Manager..."
+mkdir -p /var/proxy_manager
+cd /var/proxy_manager
+
+# Cria docker-compose.yml do NPM com MariaDB ARM-friendly
+cat > docker-compose.yml <<EOF
+version: "3"
+
+services:
+  app:
+    image: jc21/nginx-proxy-manager:latest
+    restart: always
+    ports:
+      - "${NPM_HTTP}:80"
+      - "${NPM_GUI}:81"
+      - "${NPM_HTTPS}:443"
+    environment:
+      DB_MYSQL_HOST: db
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: npm
+      DB_MYSQL_PASSWORD: npm
+      DB_MYSQL_NAME: npm
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    depends_on:
+      - db
+
+  db:
+    image: yobasystems/alpine-mariadb:latest
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: npm
+      MYSQL_DATABASE: npm
+      MYSQL_USER: npm
+      MYSQL_PASSWORD: npm
+    volumes:
+      - ./mysql:/var/lib/mysql
+EOF
+
 docker-compose up -d
 
-echo "[INFO] AzuraCast instalado com sucesso!"
-echo "HTTP: 10080, HTTPS: 10443, STREAM: 9000-9999"
+echo "[INFO] Nginx Proxy Manager iniciado!"
 
+echo "[INFO] Instalando AzuraCast..."
+mkdir -p /var/azuracast
+cd /var/azuracast
+curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
+chmod +x docker.sh
+
+echo "[INFO] Instalando Docker/Docker Compose do AzuraCast (se necessário)..."
+./docker.sh install-docker
+./docker.sh install-docker-compose
+
+# Configura portas do AzuraCast
+cat > .env <<EOF
+AZURACAST_HTTP_PORT=${AZURACAST_HTTP}
+AZURACAST_HTTPS_PORT=${AZURACAST_HTTPS}
+AZURACAST_RADIO_PORT_MIN=${STREAM_MIN}
+AZURACAST_RADIO_PORT_MAX=${STREAM_MAX}
+EOF
+
+echo "[INFO] Instalando AzuraCast em modo Docker..."
+yes '' | ./docker.sh install
+
+echo "[INFO] AzuraCast instalado com sucesso!"
+echo "HTTP: ${AZURACAST_HTTP}, HTTPS: ${AZURACAST_HTTPS}, STREAM: ${STREAM_MIN}-${STREAM_MAX}"
+echo "Configure um Proxy Host no Nginx Proxy Manager apontando para essas portas."
+#!/bin/bash
+# install.sh - Instalação automatizada AzuraCast + Nginx Proxy Manager (multi-site, ARM-ready)
+
+set -e
+
+echo "[INFO] Verificando portas disponíveis..."
+# AzuraCast default HTTP/HTTPS
+AZURACAST_HTTP=10080
+AZURACAST_HTTPS=10443
+STREAM_MIN=9000
+STREAM_MAX=9999
+
+# Nginx Proxy Manager default ports
+NPM_HTTP=80
+NPM_HTTPS=443
+NPM_GUI=81
+
+echo "[INFO] Instalando Docker/Docker Compose..."
+
+# Instala Docker (Ubuntu ARM)
+apt-get update -qq
+apt-get install -y -qq ca-certificates curl gnupg lsb-release
+
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+    > /etc/apt/sources.list.d/docker.list
+
+apt-get update -qq
+apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+systemctl enable --now docker.service
+
+echo "[INFO] Instalando Nginx Proxy Manager..."
+mkdir -p /var/proxy_manager
+cd /var/proxy_manager
+
+# Cria docker-compose.yml do NPM com MariaDB ARM-friendly
+cat > docker-compose.yml <<EOF
+version: "3"
+
+services:
+  app:
+    image: jc21/nginx-proxy-manager:latest
+    restart: always
+    ports:
+      - "${NPM_HTTP}:80"
+      - "${NPM_GUI}:81"
+      - "${NPM_HTTPS}:443"
+    environment:
+      DB_MYSQL_HOST: db
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: npm
+      DB_MYSQL_PASSWORD: npm
+      DB_MYSQL_NAME: npm
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    depends_on:
+      - db
+
+  db:
+    image: yobasystems/alpine-mariadb:latest
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: npm
+      MYSQL_DATABASE: npm
+      MYSQL_USER: npm
+      MYSQL_PASSWORD: npm
+    volumes:
+      - ./mysql:/var/lib/mysql
+EOF
+
+docker-compose up -d
+
+echo "[INFO] Nginx Proxy Manager iniciado!"
+
+echo "[INFO] Instalando AzuraCast..."
+mkdir -p /var/azuracast
+cd /var/azuracast
+curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
+chmod +x docker.sh
+
+echo "[INFO] Instalando Docker/Docker Compose do AzuraCast (se necessário)..."
+./docker.sh install-docker
+./docker.sh install-docker-compose
+
+# Configura portas do AzuraCast
+cat > .env <<EOF
+AZURACAST_HTTP_PORT=${AZURACAST_HTTP}
+AZURACAST_HTTPS_PORT=${AZURACAST_HTTPS}
+AZURACAST_RADIO_PORT_MIN=${STREAM_MIN}
+AZURACAST_RADIO_PORT_MAX=${STREAM_MAX}
+EOF
+
+echo "[INFO] Instalando AzuraCast em modo Docker..."
+yes '' | ./docker.sh install
+
+echo "[INFO] AzuraCast instalado com sucesso!"
+echo "HTTP: ${AZURACAST_HTTP}, HTTPS: ${AZURACAST_HTTPS}, STREAM: ${STREAM_MIN}-${STREAM_MAX}"
+echo "Configure um Proxy Host no Nginx Proxy Manager apontando para essas portas."
 echo -e "\n===================================================="
 echo "PRÓXIMOS PASSOS RECOMENDADOS:"
 echo ""
