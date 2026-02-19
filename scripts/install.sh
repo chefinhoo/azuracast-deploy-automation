@@ -120,6 +120,6 @@ HTTP/2 Support
 Informe seu e-mail e aceite os termos Let’s Encrypt
 
 Acesse o AzuraCast pelo seu domínio:
-https://azura.daniloramos.dev.br
+https://azura.seudominio.com
 
 EOL
