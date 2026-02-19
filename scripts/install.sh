@@ -51,27 +51,38 @@ systemctl enable --now docker
 # Instala AzuraCast
 # ========================
 echo "[INFO] Instalando AzuraCast..."
+
 cd /var/azuracast
+
+# Baixa script oficial
 curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
 chmod +x docker.sh
 
-# Configura para portas não conflitantes
-echo "[INFO] Ajustando portas do AzuraCast..."
+# ========================
+# Configura portas antes da instalação
+# ========================
+cat > .env <<EOL
+# Portas da interface web
+AZURACAST_HTTP_PORT=10080
+AZURACAST_HTTPS_PORT=10443
+# Porta base de streaming (Icecast/Shoutcast)
+AZURACAST_ICECAST_PORT=9000
+EOL
+
+echo "[INFO] Instalando AzuraCast com portas customizadas..."
 yes | ./docker.sh install
 
-# Atualiza .env com portas customizadas
-echo "AZURACAST_HTTP_PORT=10080" > .env
-echo "AZURACAST_HTTPS_PORT=10443" >> .env
-
-# Reinicia AzuraCast com novas portas
-docker-compose down || true
-docker-compose up -d
+echo "[INFO] Reiniciando AzuraCast para aplicar portas..."
+docker compose down || true
+docker compose up -d
 
 # ========================
 # Instala Nginx Proxy Manager
 # ========================
 echo "[INFO] Instalando Nginx Proxy Manager..."
+
 cd /var/proxy_manager
+
 cat > docker-compose.yml <<EOL
 version: "3"
 services:
@@ -90,8 +101,11 @@ services:
       DB_MYSQL_NAME: "npm"
     depends_on:
       - db
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
   db:
-    image: jc21/mariadb-aria:10.5
+    image: mariadb:10.11
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: "npm"
@@ -102,13 +116,13 @@ services:
       - ./data/mysql:/var/lib/mysql
 EOL
 
-docker-compose up -d
+docker compose up -d
 
 # ========================
 # Finalização
 # ========================
 echo "[INFO] AzuraCast instalado com sucesso!"
-echo "HTTP: 10080, HTTPS: 10443, STREAM: 9000-9999"
+echo "HTTP: 10080, HTTPS: 10443, STREAM: 9000+"
 echo "Configure um Proxy Host no Nginx Proxy Manager apontando para essas portas."
 
 cat <<EOL
@@ -134,5 +148,7 @@ Informe seu e-mail e aceite os termos Let’s Encrypt
 
 Acesse o AzuraCast pelo seu domínio:
 https://azura.seudominio.com
+
+As rádios estarão disponíveis em streaming a partir da porta 9000.
 
 EOL
