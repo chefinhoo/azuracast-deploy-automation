@@ -46,7 +46,7 @@ sudo bash scripts/uninstall.sh
    - **IMPORTANT:** Change credentials immediately after first login!
 
 2. **Create a Proxy Host pointing to AzuraCast:**
-   - Domain Names: `seu domínio` (ex: azura.daniloramos.dev.br)
+   - Domain Names: `seu domínio` (ex: azura.seudominio.com)
    - Scheme: `http`
    - Forward Hostname/IP: `IP público do servidor` or Docker container name
    - Forward Port: `8000`
@@ -59,7 +59,7 @@ sudo bash scripts/uninstall.sh
    - HTTP/2 Support: ✅
    - Provide email and accept Let's Encrypt Terms
 
-4. **Access AzuraCast via your domain:** `https://azura.daniloramos.dev.br`
+4. **Access AzuraCast via your domain:** `https://azura.seudominio.com`
 
 ## What Gets Installed
 
