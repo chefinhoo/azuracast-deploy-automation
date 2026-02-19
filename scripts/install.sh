@@ -29,9 +29,11 @@ if fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; then
 fi
 
 # ========================
-# Criando diretórios
+# Limpa instalações antigas
 # ========================
-echo "[INFO] Criando diretórios de instalação..."
+echo "[INFO] Removendo instalações antigas do AzuraCast..."
+rm -rf /var/azuracast
+rm -rf /var/proxy_manager
 mkdir -p /var/azuracast
 mkdir -p /var/proxy_manager
 
@@ -43,7 +45,9 @@ apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg lsb-release
 
 mkdir -p /etc/apt/keyrings
+rm -f /etc/apt/keyrings/docker.gpg
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
 echo \
 "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
 > /etc/apt/sources.list.d/docker.list
@@ -75,7 +79,7 @@ EOL
 echo "[INFO] Executando instalação do AzuraCast..."
 yes | ./docker.sh install
 
-echo "[INFO] Reiniciando AzuraCast..."
+echo "[INFO] Reiniciando AzuraCast para garantir aplicação das portas..."
 docker compose down || true
 docker compose up -d
 
@@ -119,6 +123,12 @@ services:
 EOL
 
 docker compose up -d
+
+# ========================
+# Limpeza final
+# ========================
+echo "[INFO] Limpando repositório temporário, se existir..."
+rm -rf /var/azuracast-deploy-automation
 
 # ========================
 # Finalização
