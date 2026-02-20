@@ -1,4 +1,20 @@
 #!/bin/bash
+# =========================================================
+# Script de remoção completa do AzuraCast + Nginx Proxy Manager
+# 
+# Copyright (c) 2026 Danilo Ramos
+# Licensed under MIT License (automation script only)
+# 
+# This script removes installations of:
+# - AzuraCast © AzuraCast Contributors (Apache 2.0)
+#   https://www.azuracast.com
+# - Nginx Proxy Manager © Jamie Curnow (MIT License)
+#   https://nginxproxymanager.com
+# - Docker © Docker, Inc. (Apache 2.0)
+#   https://www.docker.com
+# =========================================================
+
+#!/bin/bash
 # install.sh - Instalação automática de AzuraCast + Nginx Proxy Manager
 # Autor: Danilo Ramos
 # Data: 2026-02-20
@@ -85,17 +101,41 @@ chmod +x docker.sh
 # Define portas internas (HTTP/HTTPS na faixa 8000-8999, streaming 9000-9999)
 export AZURACAST_HTTP_PORT=8080
 export AZURACAST_HTTPS_PORT=8043
-export AZURACAST_STATION_PORT=9000  # primeira porta de streaming
-export AZURACAST_STATION_PORT_END=9999  # última porta de streaming
+export AZURACAST_STATION_PORT=9000
+export AZURACAST_STATION_PORT_END=9999
 
 # Instalação não interativa
 yes '' | ./docker.sh install
 
+# -------------------------------
+# Adiciona portas HTTP/HTTPS e streaming no docker-compose
+# -------------------------------
+OVERRIDE_FILE="docker-compose.override.yml"
+if [ ! -f "$OVERRIDE_FILE" ]; then
+    echo "[INFO] Criando docker-compose.override.yml para expor portas..."
+    cat > "$OVERRIDE_FILE" <<EOL
+version: '3'
+services:
+  web:
+    ports:
+      - "8080:80"       # HTTP AzuraCast
+      - "8043:443"      # HTTPS AzuraCast
+      - "9000-9999:9000-9999" # Streaming
+EOL
+else
+    echo "[INFO] Atualizando docker-compose.override.yml existente..."
+    sed -i "/ports:/a \      - '8080:80'\n      - '8043:443'\n      - '9000-9999:9000-9999'" "$OVERRIDE_FILE"
+fi
+
+# Reinicia o AzuraCast para aplicar portas
+docker compose down
+docker compose up -d
+
 echo "[INFO] Limpando arquivos temporários..."
 cd ~
 rm -rf azuracast-deploy-automation
-echo "[INFO] Instalação concluída e arquivos temporários removidos."
 
+echo "[INFO] Instalação concluída e arquivos temporários removidos."
 echo "[INFO] AzuraCast instalado com sucesso!"
 echo "HTTP interno: 8080"
 echo "HTTPS interno: 8043"
