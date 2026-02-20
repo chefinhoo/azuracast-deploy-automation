@@ -49,7 +49,7 @@ sudo bash scripts/uninstall.sh
    - Domain Names: `seu domínio` (ex: azura.seudominio.com)
    - Scheme: `http`
    - Forward Hostname/IP: `IP público do servidor` or Docker container name
-   - Forward Port: `8000`
+   - Forward Port: `8043`
    - Enable Websockets: ✅
    - Block Common Exploits: ✅
 
@@ -65,8 +65,8 @@ sudo bash scripts/uninstall.sh
 
 - **Docker & Docker Compose** (if not already installed)
 - **AzuraCast** in `/var/azuracast`
-  - Web panel on port `8000`
-  - Streaming ports `8010-8500`
+  - Web panel on port `8043`
+  - Streaming ports `9000-9999`
 - **Nginx Proxy Manager** in `/opt/nginx-proxy-manager`
   - Admin panel on port `81`
   - HTTP on port `80`
@@ -87,8 +87,8 @@ sudo bash scripts/uninstall.sh
 | Nginx Proxy Manager | 80 | HTTP |
 | Nginx Proxy Manager | 443 | HTTPS |
 | Nginx Proxy Manager | 81 | Admin Panel |
-| AzuraCast | 8000 | Web Panel |
-| AzuraCast | 8010-8500 | Radio Streams |
+| AzuraCast | 8043 | Web Panel |
+| AzuraCast | 9000-9999 | Radio Streams |
 
 ## Troubleshooting
 
