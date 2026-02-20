@@ -321,11 +321,14 @@ EOF
             
             # Reiniciar containers para aplicar novas portas
             log_info "Reiniciando containers para aplicar novas portas..."
-            cd "$AZURACAST_DIR" || return 1
-            docker compose down 2>/dev/null || true
-            sleep 3
-            docker compose up -d || log_error "Falha ao reiniciar containers"
-            sleep 5
+            if [ -f "$AZURACAST_DIR/docker-compose.yml" ]; then
+                (cd "$AZURACAST_DIR" && docker compose down > /dev/null 2>&1 || true)
+                sleep 3
+                (cd "$AZURACAST_DIR" && docker compose up -d > /dev/null 2>&1) || log_warn "Aviso ao reiniciar containers"
+                sleep 5
+            else
+                log_warn "Arquivo docker-compose.yml não encontrado em $AZURACAST_DIR"
+            fi
         else
             log_success "Portas no .env estão corretas!"
         fi
@@ -460,9 +463,10 @@ server {
 }
 NGINX_EOF
     
-    # Substituir placeholders
-    sed -i "s|DOMAIN_PLACEHOLDER|${domain}|g" "$temp_nginx_conf"
-    sed -i "s|DOMAIN_PATH_PLACEHOLDER|${domain_path}|g" "$temp_nginx_conf"
+    # Substituir placeholders - usar | como delimiter
+    # Escapar caracteres especiais (/,#,\) no domínio
+    sed -i "s|DOMAIN_PLACEHOLDER|$(printf '%s\n' "$domain" | sed -e 's/[\/&#]/\\&/g')|g" "$temp_nginx_conf"
+    sed -i "s|DOMAIN_PATH_PLACEHOLDER|$(printf '%s\n' "$domain_path" | sed -e 's/[\/&#]/\\&/g')|g" "$temp_nginx_conf"
     
     # Copiar para o container
     if ! docker cp "$temp_nginx_conf" "site-estatico:/etc/nginx/conf.d/${domain}.conf"; then

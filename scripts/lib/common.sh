@@ -451,20 +451,21 @@ prompt_domain() {
         read -rp "👉 Informe o domínio (ex: seudominio.com): " domain
         
         if [ -z "$domain" ]; then
-            log_error "Domínio não pode estar vazio."
+            log_error "Domínio não pode estar vazio." >&2
             continue
         fi
         
         if ! validate_domain "$domain"; then
-            log_error "Domínio inválido: $domain"
+            log_error "Domínio inválido: $domain" >&2
             domain=""
             continue
         fi
         
-        log_success "Domínio validado: $domain"
+        log_success "Domínio validado: $domain" >&2
     done
     
-    echo "$domain"
+    # Retornar APENAS o domínio (sem newline) para evitar contaminar variáveis
+    printf "%s" "$domain"
 }
 
 # Solicitar entrada com validação
