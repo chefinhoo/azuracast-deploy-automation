@@ -217,16 +217,22 @@ EOL
 setup_azuracast() {
     log_info "Configurando AzuraCast..."
     
-    # Verificar portas
-    for port in "$AZURACAST_HTTP_PORT" "$AZURACAST_HTTPS_PORT"; do
-        if ! check_port_available "$port"; then
-            log_error "Porta $port já está em uso."
-            return 1
-        fi
-    done
-    
     log_info "Criando diretório da aplicação: $AZURACAST_DIR"
     mkdir -p "$AZURACAST_DIR" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    # Parar e remover containers antigos do AzuraCast se existirem
+    cd "$AZURACAST_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
+    
+    if [ -f docker-compose.yml ] || [ -f docker-compose.override.yml ]; then
+        log_info "Removendo containers antigos do AzuraCast..."
+        docker compose down -v 2>/dev/null || true
+        sleep 3
+    fi
+    
+    # Limpar containers órfãos que possam estar usando as portas
+    log_info "Limpando containers órfãos..."
+    docker ps -a --filter "name=azuracast" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
+    sleep 2
     
     cd "$AZURACAST_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
     
@@ -251,10 +257,8 @@ setup_azuracast() {
     fi
     
     log_info "Criando arquivo de sobrescrita docker-compose..."
-    if [ ! -f docker-compose.override.yml ]; then
-        cat > docker-compose.override.yml <<'EOL' || \
-            { log_error "Falha ao criar override"; return 1; }
-version: "3.8"
+    cat > docker-compose.override.yml <<'EOL' || \
+        { log_error "Falha ao criar override"; return 1; }
 services:
   web:
     ports:
@@ -268,10 +272,12 @@ services:
       retries: 3
       start_period: 60s
 EOL
-    fi
     
-    log_info "Reiniciando serviços do AzuraCast..."
-    docker compose down || true
+    log_info "Parando serviços do AzuraCast..."
+    docker compose down -v 2>/dev/null || true
+    sleep 3
+    
+    log_info "Iniciando serviços do AzuraCast..."
     if ! docker compose up -d; then
         log_error "Falha ao iniciar AzuraCast."
         return 1
