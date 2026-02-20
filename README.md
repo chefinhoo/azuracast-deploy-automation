@@ -111,6 +111,24 @@ Este script identifica:
 - ❌ Processos usando as portas 8080, 8043, 9000
 - ❌ Containers Docker bloqueando portas
 - ✅ Comandos para liberar portas
+
+### Corrigir Portas do AzuraCast
+
+Se após a instalação o AzuraCast estiver usando portas incorretas (80/443 em vez de 8080/8043):
+
+```bash
+cd azuracast-deploy-automation
+sudo bash fix_azuracast_ports.sh
+```
+
+Este script:
+- 🔍 Mostra configuração atual e nova
+- ✅ Pede confirmação antes de aplicar
+- 💾 Cria backup do arquivo `.env`
+- 🔧 Atualiza todas as portas
+- 🔄 Reinicia containers automaticamente
+- ✅ Verifica portas após reinício
+
 ## Desinstalação
 
 > ⚠️ Atenção: o processo abaixo remove **AzuraCast, Nginx Proxy Manager e Docker** do servidor.
