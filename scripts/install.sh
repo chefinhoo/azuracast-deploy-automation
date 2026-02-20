@@ -17,15 +17,6 @@
 #   https://www.docker.com
 # =========================================================
 
-#!/bin/bash
-# =========================================================
-# Script de instalação automatizada do AzuraCast + Nginx Proxy Manager
-# + criação de vhost para site estático (nginx container)
-#
-# Copyright (c) 2026 Danilo Ramos
-# Licensed under MIT License (automation script only)
-# =========================================================
-
 set -euo pipefail
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
