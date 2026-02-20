@@ -291,7 +291,49 @@ EOF
         return 1
     fi
     
-    log_success "AzuraCast instalado com sucesso!"
+    log_success "AzuraCast instalado!"
+    
+    # Verificar e corrigir portas no arquivo .env
+    log_info "Verificando configuração de portas no arquivo .env..."
+    if [ -f "$AZURACAST_DIR/.env" ]; then
+        # Verificar se as portas estão corretas
+        local current_http=$(grep "^AZURACAST_HTTP_PORT=" "$AZURACAST_DIR/.env" | cut -d= -f2)
+        local current_https=$(grep "^AZURACAST_HTTPS_PORT=" "$AZURACAST_DIR/.env" | cut -d= -f2)
+        
+        if [ "$current_http" != "$AZURACAST_HTTP_PORT" ] || [ "$current_https" != "$AZURACAST_HTTPS_PORT" ]; then
+            log_warn "Portas no .env não correspondem às configuradas. Corrigindo..."
+            
+            # Fazer backup do .env
+            cp "$AZURACAST_DIR/.env" "$AZURACAST_DIR/.env.backup"
+            
+            # Corrigir portas
+            sed -i "s/^AZURACAST_HTTP_PORT=.*/AZURACAST_HTTP_PORT=${AZURACAST_HTTP_PORT}/" "$AZURACAST_DIR/.env"
+            sed -i "s/^AZURACAST_HTTPS_PORT=.*/AZURACAST_HTTPS_PORT=${AZURACAST_HTTPS_PORT}/" "$AZURACAST_DIR/.env"
+            
+            # Se AZURACAST_STATION_PORTS não existir, adicionar
+            if ! grep -q "^AZURACAST_STATION_PORTS=" "$AZURACAST_DIR/.env"; then
+                echo "AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}" >> "$AZURACAST_DIR/.env"
+            else
+                sed -i "s/^AZURACAST_STATION_PORTS=.*/AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}/" "$AZURACAST_DIR/.env"
+            fi
+            
+            log_success "Portas corrigidas no arquivo .env"
+            
+            # Reiniciar containers para aplicar novas portas
+            log_info "Reiniciando containers para aplicar novas portas..."
+            cd "$AZURACAST_DIR" || return 1
+            docker compose down 2>/dev/null || true
+            sleep 3
+            docker compose up -d || log_error "Falha ao reiniciar containers"
+            sleep 5
+        else
+            log_success "Portas no .env estão corretas!"
+        fi
+    else
+        log_error "Arquivo .env não encontrado!"
+        return 1
+    fi
+    
     log_info "Aguardando serviços iniciarem..."
     sleep 5
     
