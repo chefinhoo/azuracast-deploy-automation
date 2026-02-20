@@ -360,11 +360,12 @@ create_vhost() {
 </body>
 </html>
 EOF
-EOF
     
     log_info "Configurando Nginx com domínio $domain..."
-    docker exec site-estatico sh -c "cat > /etc/nginx/conf.d/${domain}.conf" <<EOF || \
-        { log_error "Falha ao criar config Nginx"; return 1; }
+    
+    # Criar arquivo de configuração temporário
+    local temp_nginx_conf="/tmp/nginx-${domain}.conf"
+    cat > "$temp_nginx_conf" <<'NGINX_EOF'
 server {
     listen 80 default_server;
     server_name _;
@@ -373,13 +374,13 @@ server {
 
 server {
     listen 80;
-    server_name ${domain} www.${domain};
+    server_name DOMAIN_PLACEHOLDER www.DOMAIN_PLACEHOLDER;
 
-    root ${domain_path};
+    root DOMAIN_PATH_PLACEHOLDER;
     index index.html;
 
     location / {
-        try_files \$uri \$uri/ =404;
+        try_files $uri $uri/ =404;
     }
 
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$ {
@@ -387,7 +388,20 @@ server {
         add_header Cache-Control "public, immutable";
     }
 }
-EOF
+NGINX_EOF
+    
+    # Substituir placeholders
+    sed -i "s|DOMAIN_PLACEHOLDER|${domain}|g" "$temp_nginx_conf"
+    sed -i "s|DOMAIN_PATH_PLACEHOLDER|${domain_path}|g" "$temp_nginx_conf"
+    
+    # Copiar para o container
+    if ! docker cp "$temp_nginx_conf" "site-estatico:/etc/nginx/conf.d/${domain}.conf"; then
+        log_error "Falha ao criar config Nginx"
+        rm -f "$temp_nginx_conf"
+        return 1
+    fi
+    
+    rm -f "$temp_nginx_conf"
     
     log_info "Testando configuração Nginx..."
     if ! docker exec site-estatico nginx -t > /dev/null 2>&1; then
