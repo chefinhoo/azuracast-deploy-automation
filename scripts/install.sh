@@ -258,51 +258,29 @@ setup_azuracast() {
     
     chmod +x docker.sh || { log_error "Falha ao configurar permissões"; return 1; }
     
-    log_info "Executando instalação do AzuraCast..."
+    log_info "Configurando variáveis de ambiente para o AzuraCast..."
+    log_info "HTTP Port: $AZURACAST_HTTP_PORT"
+    log_info "HTTPS Port: $AZURACAST_HTTPS_PORT"
+    log_info "Station Ports: $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
+    
+    # Configurar variáveis de ambiente para o instalador do AzuraCast
     export AZURACAST_HTTP_PORT="$AZURACAST_HTTP_PORT"
     export AZURACAST_HTTPS_PORT="$AZURACAST_HTTPS_PORT"
-    export AZURACAST_STATION_PORT="$AZURACAST_STATION_PORT_START"
-    export AZURACAST_STATION_PORT_END="$AZURACAST_STATION_PORT_END"
+    export AZURACAST_SFTP_PORT="2022"
+    export AZURACAST_STATION_PORTS="${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}"
+    export LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
+    export BEHIND_PROXY="true"
     
-    if ! echo '' | ./docker.sh install; then
+    log_info "Executando instalação do AzuraCast..."
+    log_info "O instalador usará as portas configuradas automaticamente."
+    
+    if ! ./docker.sh install; then
         log_error "Falha durante instalação do AzuraCast."
         return 1
     fi
     
-    log_info "Criando arquivo de sobrescrita docker-compose..."
-    cat > docker-compose.override.yml <<EOL || \
-        { log_error "Falha ao criar override"; return 1; }
-services:
-  web:
-    container_name: azuracast
-    ports:
-      - "${AZURACAST_HTTP_PORT:-8080}:80"
-      - "${AZURACAST_HTTPS_PORT:-8043}:443"
-      - "${AZURACAST_STATION_PORT_START:-9000}-${AZURACAST_STATION_PORT_END:-9999}:${AZURACAST_STATION_PORT_START:-9000}-${AZURACAST_STATION_PORT_END:-9999}"
-    environment:
-      - ENABLE_REDIS=true
-      - ENABLE_ADVANCED_FEATURES=true
-      - BEHIND_PROXY=true
-      - PREFER_RELEASE_BUILDS=stable
-    restart: unless-stopped
-EOL
-    
-    log_info "Parando serviços do AzuraCast..."
-    docker compose down -v 2>/dev/null || true
-    sleep 3
-    
-    log_info "Iniciando serviços do AzuraCast..."
-    if ! docker compose up -d; then
-        log_error "Falha ao iniciar AzuraCast."
-        return 1
-    fi
-    
-    log_info "Aguardando AzuraCast ficar pronto..."
-    if wait_container_healthy "azuracast-web-1" 120; then
-        log_success "AzuraCast iniciado com sucesso."
-    else
-        log_warn "AzuraCast pode ainda estar iniciando. Verifique logs later."
-    fi
+    log_success "AzuraCast instalado com sucesso!"
+    log_info "Aguarde alguns minutos para os serviços iniciarem completamente."
     
     return 0
 }
