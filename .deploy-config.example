@@ -1,0 +1,142 @@
+#!/bin/bash
+# =========================================================
+# Arquivo de configuração para AzuraCast Deploy Automation
+# Configuration file for AzuraCast Deploy Automation
+# 
+# Copie este arquivo para .deploy-config e customize conforme necessário.
+# Copy this file to .deploy-config and customize as needed.
+# =========================================================
+
+# ==========================================================
+# DIRETÓRIOS
+# ==========================================================
+
+# Diretório do Nginx Proxy Manager
+# Directory for Nginx Proxy Manager
+PROXY_MANAGER_DIR="/var/proxy_manager"
+
+# Diretório do AzuraCast
+# Directory for AzuraCast
+AZURACAST_DIR="/var/azuracast"
+
+# Raiz para sites estáticos
+# Root directory for static sites
+WEB_ROOT="/var/www"
+
+# ==========================================================
+# PORTAS - NGINX PROXY MANAGER
+# ==========================================================
+
+# Porta do painel administrativo do NPM
+# NPM admin panel port
+NPM_ADMIN_PORT=81
+
+# Porta HTTP
+# HTTP port
+NPM_HTTP_PORT=80
+
+# Porta HTTPS
+# HTTPS port
+NPM_HTTPS_PORT=443
+
+# ==========================================================
+# PORTAS - AZURACAST
+# ==========================================================
+
+# Porta HTTP do frontend
+# HTTP frontend port
+AZURACAST_HTTP_PORT=8080
+
+# Porta HTTPS do frontend
+# HTTPS frontend port
+AZURACAST_HTTPS_PORT=8043
+
+# Porta inicial para streaming de estações
+# Starting port for station streaming
+AZURACAST_STATION_PORT_START=9000
+
+# Porta final para streaming de estações
+# Ending port for station streaming
+AZURACAST_STATION_PORT_END=9999
+
+# ==========================================================
+# PORTAS - SITE ESTÁTICO
+# ==========================================================
+
+# Porta para container Nginx de site estático
+# Port for static site Nginx container
+STATIC_SITE_PORT=8085
+
+# ==========================================================
+# CREDENCIAIS
+# ==========================================================
+
+# Senha padrão do Nginx Proxy Manager (será solicitada ao usuário se deixado em branco)
+# Default password for NPM (will be asked to user if left empty)
+NPM_DB_PASSWORD="npm"
+
+# Usuário do banco de dados do NPM
+# NPM database user
+NPM_DB_USER="npm"
+
+# Nome do banco de dados do NPM
+# NPM database name
+NPM_DB_NAME="npm"
+
+# ==========================================================
+# COMPORTAMENTO
+# ==========================================================
+
+# Solicitar domínio durante instalação (1 = sim, 0 = não)
+# Ask for domain during installation (1 = yes, 0 = no)
+PROMPT_FOR_DOMAIN=1
+
+# Domínio padrão (será usado se PROMPT_FOR_DOMAIN=0)
+# Default domain (will be used if PROMPT_FOR_DOMAIN=0)
+DEFAULT_DOMAIN=""
+
+# Remover diretórios existentes antes de instalar (1 = sim, 0 = não)
+# Remove existing directories before installing (1 = yes, 0 = no)
+FORCE_FRESH_INSTALL=0
+
+# Habilitar logs verbose (1 = sim, 0 = não)
+# Enable verbose logging (1 = yes, 0 = no)
+VERBOSE_LOGGING=0
+
+# ==========================================================
+# VERSÕES
+# ==========================================================
+
+# Versão do Nginx Proxy Manager
+# Nginx Proxy Manager version
+NPM_VERSION="latest"
+
+# Versão do MariaDB
+# MariaDB version
+MARIADB_VERSION="10.11"
+
+# ==========================================================
+# TIMEOUTS
+# ==========================================================
+
+# Timeout para aguardar container ficar pronto (segundos)
+# Timeout for waiting container to be ready (seconds)
+CONTAINER_HEALTH_CHECK_TIMEOUT=120
+
+# Timeout para operações de rede (segundos)
+# Timeout for network operations (seconds)
+NETWORK_TIMEOUT=30
+
+# ==========================================================
+# CONFIGURAÇÕES DE REDE
+# ==========================================================
+
+# Usar IPv6 (1 = sim, 0 = não)
+# Use IPv6 (1 = yes, 0 = no)
+USE_IPV6=0
+
+# IP público a usar em exibições (deixar vazio para detectar automaticamente)
+# Public IP to use in displays (leave empty to auto-detect)
+PUBLIC_IP=""
+
+# ==========================================================

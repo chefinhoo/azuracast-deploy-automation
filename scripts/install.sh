@@ -19,54 +19,111 @@
 
 set -euo pipefail
 
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  echo "[ERRO] Execute como root."
-  exit 1
+# ==========================================================
+# IMPORTAÇÃO DE BIBLIOTECA COMUM
+# ==========================================================
+SCRIPT_FILE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_FILE")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Carregar biblioteca comum
+if [ ! -f "${SCRIPT_DIR}/lib/common.sh" ]; then
+    echo "[ERRO] Biblioteca comum não encontrada: ${SCRIPT_DIR}/lib/common.sh" >&2
+    exit 1
 fi
 
-# ---------------------------------------------------------
-# Dependências
-# ---------------------------------------------------------
-echo "[INFO] Atualizando pacotes..."
-apt-get update -qq
-apt-get install -y -qq ca-certificates curl gnupg lsb-release software-properties-common
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/lib/common.sh"
 
-# ---------------------------------------------------------
-# Docker
-# ---------------------------------------------------------
-echo "[INFO] Instalando Docker..."
-mkdir -p /etc/apt/keyrings
+# ==========================================================
 
-if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-fi
+# ==========================================================
+# INSTALAÇÃO DO DOCKER
+# ==========================================================
+install_docker() {
+    log_info "Iniciando instalação do Docker..."
+    
+    if command_exists docker; then
+        log_success "Docker já está instalado: $(docker_version)"
+        return 0
+    fi
+    
+    log_info "Atualizando pacotes do sistema..."
+    apt-get update -qq || { log_error "Falha ao atualizar pacotes"; return 1; }
+    
+    log_info "Instalando dependências..."
+    apt-get install -y -qq ca-certificates curl gnupg lsb-release software-properties-common || \
+        { log_error "Falha ao instalar dependências"; return 1; }
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-> /etc/apt/sources.list.d/docker.list
+    
+    log_info "Configurando repositório do Docker..."
+    mkdir -p /etc/apt/keyrings
+    
+    if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
+        if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+             gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
+            log_error "Falha ao adicionar chave GPG do Docker."
+            return 1
+        fi
+        log_success "Chave GPG do Docker adicionada."
+    fi
+    
+    local arch=$(dpkg --print-architecture)
+    local distro=$(lsb_release -cs)
+    echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu ${distro} stable" \
+        > /etc/apt/sources.list.d/docker.list || \
+        { log_error "Falha ao configurar repositório Docker"; return 1; }
+    
+    log_info "Atualizando índices de pacotes..."
+    apt-get update -qq || { log_error "Falha ao atualizar pacotes"; return 1; }
+    
+    log_info "Instalando Docker Engine, CLI e plugins..."
+    apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin || \
+        { log_error "Falha ao instalar Docker"; return 1; }
+    
+    log_info "Habilitando e iniciando Docker daemon..."
+    if ! systemctl enable docker 2>/dev/null; then
+        log_error "Falha ao habilitar Docker daemon."
+        return 1
+    fi
+    
+    if ! systemctl start docker 2>/dev/null; then
+        log_error "Falha ao iniciar Docker daemon."
+        return 1
+    fi
+    
+    sleep 2
+    log_success "Docker instalado com sucesso: $(docker_version)"
+    return 0
+}
 
-apt-get update -qq
-apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+# ==========================================================
+# NGINX PROXY MANAGER
+# ==========================================================
+setup_nginx_proxy_manager() {
+    log_info "Configurando Nginx Proxy Manager..."
+    
+    # Verificar portas
+    for port in "$NPM_ADMIN_PORT" "$NPM_HTTP_PORT" "$NPM_HTTPS_PORT"; do
+        if ! check_port_available "$port"; then
+            log_error "Porta $port já está em uso. Não é possível continuar."
+            return 1
+        fi
+    done
+    
+    log_info "Criando diretório da aplicação: $PROXY_MANAGER_DIR"
+    mkdir -p "$PROXY_MANAGER_DIR" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    log_info "Criando docker-compose para Nginx Proxy Manager..."
+    cat > "${PROXY_MANAGER_DIR}/docker-compose.yml" <<'EOL' || \
+        { log_error "Falha ao criar docker-compose"; return 1; }
+version: "3.8"
 
-systemctl enable --now docker
-
-# ---------------------------------------------------------
-# Diretórios
-# ---------------------------------------------------------
-mkdir -p /var/proxy_manager
-mkdir -p /var/azuracast
-mkdir -p /var/www
-
-# ---------------------------------------------------------
-# Nginx Proxy Manager
-# ---------------------------------------------------------
-echo "[INFO] Subindo Nginx Proxy Manager..."
-
-cat > /var/proxy_manager/docker-compose.yml <<'EOL'
-version: "3"
 services:
   app:
     image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
     restart: always
     ports:
       - "81:81"
@@ -78,47 +135,113 @@ services:
       DB_MYSQL_USER: "npm"
       DB_MYSQL_PASSWORD: "npm"
       DB_MYSQL_NAME: "npm"
+      DISABLE_IPV6: "true"
     volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
+      - app_data:/data
+      - app_letsencrypt:/etc/letsencrypt
+    depends_on:
+      - db
+    networks:
+      - npm_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:81/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   db:
     image: mariadb:10.11
+    container_name: nginx-proxy-manager-db
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: "npm"
       MYSQL_DATABASE: "npm"
       MYSQL_USER: "npm"
       MYSQL_PASSWORD: "npm"
+      MYSQL_INITDB_SKIP_TZINFO: "yes"
     volumes:
-      - ./data/mysql:/var/lib/mysql
+      - db_data:/var/lib/mysql
+    networks:
+      - npm_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  app_data:
+  app_letsencrypt:
+  db_data:
+
+networks:
+  npm_network:
+    driver: bridge
 EOL
+    
+    log_info "Iniciando containers do Nginx Proxy Manager..."
+    cd "$PROXY_MANAGER_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
+    
+    if ! docker compose up -d; then
+        log_error "Falha ao iniciar containers do Nginx Proxy Manager."
+        return 1
+    fi
+    
+    log_info "Aguardando serviços estarem prontos..."
+    if ! wait_container_healthy "nginx-proxy-manager" 60; then
+        log_error "Nginx Proxy Manager não ficou saudável. Verifique os logs."
+        docker compose logs
+        return 1
+    fi
+    
+    log_success "Nginx Proxy Manager iniciado com sucesso."
+    return 0
+}
 
-cd /var/proxy_manager
-docker compose up -d
-
-# ---------------------------------------------------------
-# AzuraCast
-# ---------------------------------------------------------
-echo "[INFO] Instalando AzuraCast..."
-
-cd /var/azuracast
-
-curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
-chmod +x docker.sh
-
-export AZURACAST_HTTP_PORT=8080
-export AZURACAST_HTTPS_PORT=8043
-export AZURACAST_STATION_PORT=9000
-export AZURACAST_STATION_PORT_END=9999
-
-yes '' | ./docker.sh install
-
-# ---------------------------------------------------------
-# Override (somente se não existir)
-# ---------------------------------------------------------
-if [ ! -f docker-compose.override.yml ]; then
-cat > docker-compose.override.yml <<'EOL'
+# ==========================================================
+# AZURACAST
+# ==========================================================
+setup_azuracast() {
+    log_info "Configurando AzuraCast..."
+    
+    # Verificar portas
+    for port in "$AZURACAST_HTTP_PORT" "$AZURACAST_HTTPS_PORT"; do
+        if ! check_port_available "$port"; then
+            log_error "Porta $port já está em uso."
+            return 1
+        fi
+    done
+    
+    log_info "Criando diretório da aplicação: $AZURACAST_DIR"
+    mkdir -p "$AZURACAST_DIR" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    cd "$AZURACAST_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
+    
+    log_info "Baixando script de instalação do AzuraCast..."
+    if ! curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh \
+         -o docker.sh; then
+        log_error "Falha ao baixar script do AzuraCast."
+        return 1
+    fi
+    
+    chmod +x docker.sh || { log_error "Falha ao configurar permissões"; return 1; }
+    
+    log_info "Executando instalação do AzuraCast..."
+    export AZURACAST_HTTP_PORT="$AZURACAST_HTTP_PORT"
+    export AZURACAST_HTTPS_PORT="$AZURACAST_HTTPS_PORT"
+    export AZURACAST_STATION_PORT="$AZURACAST_STATION_PORT_START"
+    export AZURACAST_STATION_PORT_END="$AZURACAST_STATION_PORT_END"
+    
+    if ! echo '' | ./docker.sh install; then
+        log_error "Falha durante instalação do AzuraCast."
+        return 1
+    fi
+    
+    log_info "Criando arquivo de sobrescrita docker-compose..."
+    if [ ! -f docker-compose.override.yml ]; then
+        cat > docker-compose.override.yml <<'EOL' || \
+            { log_error "Falha ao criar override"; return 1; }
 version: "3.8"
 services:
   web:
@@ -126,58 +249,100 @@ services:
       - "8080:80"
       - "8043:443"
       - "9000-9999:9000-9999"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 EOL
-fi
+    fi
+    
+    log_info "Reiniciando serviços do AzuraCast..."
+    docker compose down || true
+    if ! docker compose up -d; then
+        log_error "Falha ao iniciar AzuraCast."
+        return 1
+    fi
+    
+    log_info "Aguardando AzuraCast ficar pronto..."
+    if wait_container_healthy "azuracast-web-1" 120; then
+        log_success "AzuraCast iniciado com sucesso."
+    else
+        log_warn "AzuraCast pode ainda estar iniciando. Verifique logs later."
+    fi
+    
+    return 0
+}
 
-docker compose down
-docker compose up -d
+# ==========================================================
+# SITE ESTÁTICO
+# ==========================================================
+setup_static_site() {
+    log_info "Configurando container de site estático..."
+    
+    # Verificar porta
+    if ! check_port_available "$STATIC_SITE_PORT"; then
+        log_error "Porta $STATIC_SITE_PORT já está em uso."
+        return 1
+    fi
+    
+    mkdir -p "$WEB_ROOT" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    # Verificar se container já existe
+    if docker ps -a --format '{{.Names}}' | grep -q '^site-estatico$'; then
+        log_info "Container 'site-estatico' já existe. Iniciando..."
+        docker start site-estatico >/dev/null 2>&1 || true
+    else
+        log_info "Criando container de site estático..."
+        docker run -d \
+            --name site-estatico \
+            --restart unless-stopped \
+            -p "$STATIC_SITE_PORT:80" \
+            -v "$WEB_ROOT:$WEB_ROOT" \
+            nginx:alpine || { log_error "Falha ao criar container"; return 1; }
+    fi
+    
+    log_success "Site estático container pronto."
+    return 0
+}
 
-# ---------------------------------------------------------
-# Container nginx para sites estáticos
-# ---------------------------------------------------------
-echo "[INFO] Preparando container de site estático..."
-
-if ! docker ps -a --format '{{.Names}}' | grep -q '^site-estatico$'; then
-
-  docker run -d \
-    --name site-estatico \
-    --restart unless-stopped \
-    -p 8085:80 \
-    -v /var/www:/var/www \
-    nginx:alpine
-
-else
-  docker start site-estatico >/dev/null || true
-fi
-
-# ---------------------------------------------------------
-# Criação de vhost
-# ---------------------------------------------------------
-echo
-echo "===================================================="
-echo "CONFIGURAÇÃO DE SITE ESTÁTICO"
-echo "===================================================="
-echo
-
-read -rp "👉 Informe o domínio (ex: seudominio.com): " DOMINIO
-
-if [ -z "$DOMINIO" ]; then
-  echo "[ERRO] Domínio não informado."
-  exit 1
-fi
-
-echo "[INFO] Criando estrutura /var/www/$DOMINIO"
-
-mkdir -p /var/www/$DOMINIO
-
-cat > /var/www/$DOMINIO/index.html <<EOF
-<h1>$DOMINIO funcionando</h1>
-<p>Site estático ativo.</p>
+# ==========================================================
+# CRIAR VHOST
+# ==========================================================
+create_vhost() {
+    print_section "CONFIGURAÇÃO DE SITE ESTÁTICO"
+    
+    local domain=$(prompt_domain)
+    
+    local domain_path="$WEB_ROOT/$domain"
+    log_info "Criando estrutura em $domain_path"
+    mkdir -p "$domain_path" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    # Criar index.html padrão
+    cat > "$domain_path/index.html" <<EOF || { log_error "Falha ao criar index.html"; return 1; }
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$domain</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; }
+        h1 { color: #333; }
+    </style>
+</head>
+<body>
+    <h1>$domain</h1>
+    <p>Site estático ativo via AzuraCast Deploy Automation</p>
+</body>
+</html>
 EOF
-
-echo "[INFO] Criando vhost no container..."
-
-docker exec site-estatico sh -c "cat > /etc/nginx/conf.d/$DOMINIO.conf <<EOF
+EOF
+    
+    log_info "Configurando Nginx com domínio $domain..."
+    docker exec site-estatico sh -c "cat > /etc/nginx/conf.d/${domain}.conf" <<EOF || \
+        { log_error "Falha ao criar config Nginx"; return 1; }
 server {
     listen 80 default_server;
     server_name _;
@@ -186,62 +351,125 @@ server {
 
 server {
     listen 80;
-    server_name $DOMINIO www.$DOMINIO;
+    server_name ${domain} www.${domain};
 
-    root /var/www/$DOMINIO;
+    root ${domain_path};
     index index.html;
 
     location / {
-        try_files \\$uri \\$uri/ =404;
+        try_files \$uri \$uri/ =404;
+    }
+
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
     }
 }
-EOF"
+EOF
+    
+    log_info "Testando configuração Nginx..."
+    if ! docker exec site-estatico nginx -t > /dev/null 2>&1; then
+        log_error "Erro na configuração Nginx."
+        return 1
+    fi
+    
+    log_info "Recarregando Nginx..."
+    docker exec site-estatico nginx -s reload || { log_error "Falha ao recarregar Nginx"; return 1; }
+    
+    log_success "Site estático '$domain' criado com sucesso."
+    echo "$domain" > /tmp/deployed_domain
+    return 0
+}
 
-docker exec site-estatico nginx -t
-docker exec site-estatico nginx -s reload
+# ==========================================================
+# EXIBIR INFORMAÇÕES FINAIS
+# ==========================================================
+display_summary() {
+    local domain=""
+    [ -f /tmp/deployed_domain ] && domain=$(cat /tmp/deployed_domain)
+    
+    local public_ip=$(get_public_ip)
+    
+    print_info_box "✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO"
+    
+    if [ -n "$domain" ]; then
+        echo "📝 Site Estático: $domain"
+        echo "   Diretório: $WEB_ROOT/$domain"
+        echo "   Teste: curl -H 'Host: $domain' http://127.0.0.1:${STATIC_SITE_PORT}"
+        echo
+    fi
+    
+    echo "🌐 Nginx Proxy Manager"
+    echo "   URL: http://$public_ip:$NPM_ADMIN_PORT"
+    echo "   Login padrão: admin@example.com / changeme"
+    echo
+    
+    echo "🎙️  AzuraCast"
+    echo "   URL direta: http://$public_ip:$AZURACAST_HTTP_PORT"
+    echo "   Portas internas: $AZURACAST_HTTP_PORT (HTTP), $AZURACAST_HTTPS_PORT (HTTPS)"
+    echo "   Streaming: portas $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
+    echo
+    
+    echo "----- PRÓXIMOS PASSOS -----"
+    echo "1. Acessar painel do Nginx Proxy Manager"
+    echo "2. Criar Proxy Hosts para:"
+    if [ -n "$domain" ]; then
+        echo "   - $domain → http://$public_ip:$STATIC_SITE_PORT"
+    fi
+    echo "   - azura.seudominio.com → http://$public_ip:$AZURACAST_HTTP_PORT"
+    echo "3. Gerar certificados SSL com Let's Encrypt"
+    echo "4. Ativar 'Force SSL' nos Proxy Hosts"
+    echo
+    echo "📋 Logs: $LOG_FILE"
+    print_separator
+}
 
-# ---------------------------------------------------------
-# Final
-# ---------------------------------------------------------
-PUBLIC_IP=$(curl -s https://ifconfig.me || true)
+# ==========================================================
+# FUNÇÃO PRINCIPAL
+# ==========================================================
+main() {
+    # Inicializar logging
+    init_logging || { 
+        echo "[ERRO] Falha ao inicializar logging" >&2
+        exit 1
+    }
+    
+    # Carregar configurações
+    load_config
+    
+    log_info "======================================================="
+    log_info "AzuraCast + Nginx Proxy Manager - Instalação"
+    log_info "======================================================="
+    
+    # Validações iniciais
+    check_root || exit 1
+    check_distribution || exit 1
+    check_connectivity || exit 1
+    
+    # Mostrar configuração
+    if [ "${VERBOSE_LOGGING:-0}" = "1" ]; then
+        show_config
+    fi
+    
+    # Instalação
+    log_info "Iniciando procedimento de instalação..."
+    install_docker || { log_error "Instalação do Docker falhou"; exit 1; }
+    setup_nginx_proxy_manager || { log_error "Setup Nginx Proxy Manager falhou"; exit 1; }
+    setup_azuracast || { log_error "Setup AzuraCast falhou"; exit 1; }
+    setup_static_site || { log_error "Setup site estático falhou"; exit 1; }
+    
+    # Criar vhost (opcional)
+    if [ "${PROMPT_FOR_DOMAIN:-1}" = "1" ]; then
+        create_vhost || log_warn "Falha na criação do vhost, continuando..."
+    fi
+    
+    # Resumo final
+    display_summary
+    
+    log_success "Instalação concluída com sucesso!"
+    log_info "Logs armazenados em: $LOG_FILE"
+}
 
-echo
-echo "===================================================="
-echo "FINALIZADO"
-echo "===================================================="
-echo
-echo "Site estático criado: $DOMINIO"
-echo
-echo "✔ Teste local do site estático:"
-echo "  curl -H \"Host: $DOMINIO\" http://127.0.0.1:8085"
-echo
-echo "✔ Painel do Nginx Proxy Manager:"
-echo "  http://$PUBLIC_IP:81"
-echo
-echo "Crie um Proxy Host para o site estático:"
-echo "  Domain Names : $DOMINIO"
-echo "  Scheme       : http"
-echo "  Forward Host : $PUBLIC_IP"
-echo "  Forward Port : 8085"
-echo
-echo "----------------------------------------------------"
-echo "INSTRUÇÕES DO AZURACAST"
-echo "----------------------------------------------------"
-echo
-echo "Acesso direto (somente para configuração inicial):"
-echo "  http://$PUBLIC_IP:8080"
-echo
-echo "No Nginx Proxy Manager, crie um Proxy Host para o AzuraCast:"
-echo "  Domain Names : azura.seudominio.com"
-echo "  Scheme       : http"
-echo "  Forward Host : $PUBLIC_IP"
-echo "  Forward Port : 8080"
-echo
-echo "Depois gere o SSL e ative 'Force SSL'."
-echo
-echo "Portas configuradas no AzuraCast:"
-echo "  Painel HTTP  : 8080"
-echo "  Painel HTTPS : 8043 (uso interno)"
-echo "  Estações     : 9000 a 9999"
-echo
-echo "===================================================="
+# Execução
+main "$@"
+
