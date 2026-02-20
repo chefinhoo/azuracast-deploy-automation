@@ -1,11 +1,14 @@
 #!/bin/bash
 # =========================================================
 # Script de instalação automatizada do AzuraCast + Nginx Proxy Manager
+# Automated installation script for AzuraCast + Nginx Proxy Manager
 # 
 # Copyright (c) 2026 Danilo Ramos
 # Licensed under MIT License (automation script only)
+# Licenciado sob MIT (apenas script de automação)
 # 
-# This script removes installations of:
+# This script installs and configures:
+# Este script instala e configura:
 # - AzuraCast © AzuraCast Contributors (Apache 2.0)
 #   https://www.azuracast.com
 # - Nginx Proxy Manager © Jamie Curnow (MIT License)
@@ -16,14 +19,14 @@
 
 set -e
 
-echo "[INFO] Atualizando pacotes e instalando dependências..."
+echo "[INFO] Atualizando pacotes e instalando dependências... / Updating packages and installing dependencies..."
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg lsb-release software-properties-common
 
 # -------------------------------
 # Docker e Docker Compose Plugin
 # -------------------------------
-echo "[INFO] Instalando Docker e Docker Compose plugin..."
+echo "[INFO] Instalando Docker e Docker Compose plugin... / Installing Docker and Docker Compose plugin..."
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
@@ -32,7 +35,7 @@ apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 systemctl enable --now docker
-echo "[INFO] Docker instalado com sucesso!"
+echo "[INFO] Docker instalado com sucesso! / Docker installed successfully!"
 docker version
 
 # -------------------------------
@@ -46,7 +49,7 @@ chown -R root:root /var/proxy_manager /var/azuracast
 # -------------------------------
 # Nginx Proxy Manager
 # -------------------------------
-echo "[INFO] Configurando Nginx Proxy Manager..."
+echo "[INFO] Configurando Nginx Proxy Manager... / Configuring Nginx Proxy Manager..."
 cat > /var/proxy_manager/docker-compose.yml <<EOL
 version: "3"
 services:
@@ -78,14 +81,14 @@ services:
       - ./data/mysql:/var/lib/mysql
 EOL
 
-echo "[INFO] Iniciando Nginx Proxy Manager..."
+echo "[INFO] Iniciando Nginx Proxy Manager... / Starting Nginx Proxy Manager..."
 cd /var/proxy_manager
 docker compose up -d
 
 # -------------------------------
 # AzuraCast
 # -------------------------------
-echo "[INFO] Instalando AzuraCast..."
+echo "[INFO] Instalando AzuraCast... / Installing AzuraCast..."
 cd /var/azuracast
 
 # Baixa o script oficial
@@ -106,7 +109,7 @@ yes '' | ./docker.sh install
 # -------------------------------
 OVERRIDE_FILE="docker-compose.override.yml"
 if [ ! -f "$OVERRIDE_FILE" ]; then
-    echo "[INFO] Criando docker-compose.override.yml para expor portas..."
+    echo "[INFO] Criando docker-compose.override.yml para expor portas... / Creating docker-compose.override.yml to expose ports..."
     cat > "$OVERRIDE_FILE" <<EOL
 version: '3'
 services:
@@ -117,7 +120,7 @@ services:
       - "9000-9999:9000-9999" # Streaming
 EOL
 else
-    echo "[INFO] Atualizando docker-compose.override.yml existente..."
+    echo "[INFO] Atualizando docker-compose.override.yml existente... / Updating existing docker-compose.override.yml..."
     sed -i "/ports:/a \      - '8080:80'\n      - '8043:443'\n      - '9000-9999:9000-9999'" "$OVERRIDE_FILE"
 fi
 
@@ -128,43 +131,43 @@ docker compose up -d
 # -------------------------------
 # Limpeza e mensagem final
 # -------------------------------
-echo "[INFO] Limpando arquivos temporários..."
+echo "[INFO] Limpando arquivos temporários... / Cleaning temporary files..."
 cd ~
 rm -rf azuracast-deploy-automation
 
 PUBLIC_IP=$(curl -s https://ifconfig.me)
 
-echo "[INFO] Instalação concluída e arquivos temporários removidos."
-echo "[INFO] AzuraCast instalado com sucesso!"
-echo "HTTP interno: 8080"
-echo "HTTPS interno: 8043"
+echo "[INFO] Instalação concluída e arquivos temporários removidos. / Installation completed and temporary files removed."
+echo "[INFO] AzuraCast instalado com sucesso! / AzuraCast installed successfully!"
+echo "HTTP interno / Internal HTTP: 8080"
+echo "HTTPS interno / Internal HTTPS: 8043"
 echo "Streaming: 9000-9999"
-echo "Acesse via Nginx Proxy Manager usando seu domínio."
+echo "Acesse via Nginx Proxy Manager usando seu domínio. / Access via Nginx Proxy Manager using your domain."
 
 # -------------------------------
 # Próximos passos
 # -------------------------------
 echo -e "\n===================================================="
-echo "PRÓXIMOS PASSOS RECOMENDADOS:"
+echo "PRÓXIMOS PASSOS RECOMENDADOS / RECOMMENDED NEXT STEPS:"
 echo ""
-echo "1️⃣ Acesse o Nginx Proxy Manager GUI:"
+echo "1️⃣ Acesse o painel do Nginx Proxy Manager / Open Nginx Proxy Manager GUI:"
 echo "   http://$PUBLIC_IP:81"
 echo ""
-echo "2️⃣ Crie um Proxy Host:"
-echo "   - Domain Names: seudominio.com"
+echo "2️⃣ Crie um Proxy Host / Create a Proxy Host:"
+echo "   - Domain Names: seudominio.com (or yourdomain.com)"
 echo "   - Scheme: https"
 echo "   - Forward Hostname/IP: localhost"
 echo "   - Forward Port: 8043 (HTTPS AzuraCast)"
 echo "   - Enable Websockets: ✅"
 echo ""
-echo "3️⃣ Aba SSL:"
+echo "3️⃣ Aba SSL / SSL tab:"
 echo "   - Request a new SSL certificate"
 echo "   - Force SSL"
-echo "   - Habilite HTTP/2"
-echo "   - Informe seu e-mail e aceite os termos Let’s Encrypt"
+echo "   - Habilite HTTP/2 / Enable HTTP/2"
+echo "   - Informe seu e-mail e aceite os termos Let’s Encrypt / Enter your email and accept Let’s Encrypt terms"
 echo ""
-echo "4️⃣ Para outras aplicações (WordPress, Node, etc.):"
-echo "   - Use portas internas na faixa 8000-8999"
-echo "   - Crie Proxy Hosts apontando para essas portas"
+echo "4️⃣ Para outras aplicações (WordPress, Node, etc.) / For other applications (WordPress, Node, etc.):"
+echo "   - Use portas internas na faixa 8000-8999 / Use internal ports in the 8000-8999 range"
+echo "   - Crie Proxy Hosts apontando para essas portas / Create Proxy Hosts pointing to those ports"
 echo ""
 echo "===================================================="
