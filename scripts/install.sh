@@ -308,6 +308,19 @@ EOF
         log_success "docker-compose.yml encontrado"
     fi
     
+    # Verificar se o arquivo azuracast.env existe (necessário para o docker-compose)
+    log_info "Verificando arquivo azuracast.env..."
+    if [ ! -f "$AZURACAST_DIR/azuracast.env" ]; then
+        log_info "Criando arquivo azuracast.env..."
+        touch "$AZURACAST_DIR/azuracast.env" || {
+            log_error "Falha ao criar azuracast.env"
+            return 1
+        }
+        log_success "Arquivo azuracast.env criado"
+    else
+        log_success "Arquivo azuracast.env existe"
+    fi
+    
     # Verificar e corrigir portas no arquivo .env
     log_info "Verificando configuração de portas no arquivo .env..."
     if [ -f "$AZURACAST_DIR/.env" ]; then
