@@ -57,17 +57,28 @@ install_docker() {
 
     
     log_info "Configurando repositório do Docker..."
+    
+    # Remover configurações antigas do Docker se existirem
+    rm -f /etc/apt/sources.list.d/docker.list
+    rm -f /etc/apt/keyrings/docker.gpg
+    
+    # Criar diretório para chaves
     mkdir -p /etc/apt/keyrings
     
-    if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
-        if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-             gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
-            log_error "Falha ao adicionar chave GPG do Docker."
-            return 1
-        fi
-        log_success "Chave GPG do Docker adicionada."
+    # Adicionar chave GPG do Docker
+    log_info "Baixando chave GPG do Docker..."
+    if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+         gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
+        log_error "Falha ao adicionar chave GPG do Docker."
+        return 1
     fi
     
+    # Definir permissões corretas para a chave
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    log_success "Chave GPG do Docker adicionada."
+    
+    # Configurar repositório do Docker
     local arch=$(dpkg --print-architecture)
     local distro=$(lsb_release -cs)
     echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] \
