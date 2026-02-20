@@ -257,20 +257,48 @@ setup_azuracast() {
     fi
     
     log_info "Criando arquivo de sobrescrita docker-compose..."
-    cat > docker-compose.override.yml <<'EOL' || \
+    cat > docker-compose.override.yml <<EOL || \
         { log_error "Falha ao criar override"; return 1; }
 services:
   web:
+    container_name: azuracast
     ports:
-      - "8080:80"
-      - "8043:443"
-      - "9000-9999:9000-9999"
+      - "${AZURACAST_HTTP_PORT:-8080}:80"
+      - "${AZURACAST_HTTPS_PORT:-8043}:443"
+      - "${AZURACAST_STATION_PORT_START:-9000}-${AZURACAST_STATION_PORT_END:-9999}:${AZURACAST_STATION_PORT_START:-9000}-${AZURACAST_STATION_PORT_END:-9999}"
+    environment:
+      - ENABLE_REDIS=true
+      - ENABLE_ADVANCED_FEATURES=true
+      - BEHIND_PROXY=true
+      - PREFER_RELEASE_BUILDS=stable
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 90s
+    networks:
+      - default
+
+  mariadb:
+    restart: unless-stopped
+    healthcheck:
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    restart: unless-stopped
+    healthcheck:
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+networks:
+  default:
+    name: azuracast_network
+    driver: bridge
 EOL
     
     log_info "Parando serviços do AzuraCast..."
