@@ -234,6 +234,19 @@ setup_azuracast() {
     docker ps -a --filter "name=azuracast" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
     sleep 2
     
+    # Forçar liberação das portas necessárias
+    log_info "Verificando e liberando portas necessárias..."
+    force_free_port "$AZURACAST_HTTP_PORT" || log_warn "Porta $AZURACAST_HTTP_PORT pode estar em uso"
+    force_free_port "$AZURACAST_HTTPS_PORT" || log_warn "Porta $AZURACAST_HTTPS_PORT pode estar em uso"
+    
+    # Parar qualquer container Docker usando as portas do AzuraCast
+    log_info "Parando containers nas portas do AzuraCast..."
+    docker ps -q --filter "publish=$AZURACAST_HTTP_PORT" | xargs -r docker stop 2>/dev/null || true
+    docker ps -q --filter "publish=$AZURACAST_HTTPS_PORT" | xargs -r docker stop 2>/dev/null || true
+    docker ps -aq --filter "publish=$AZURACAST_HTTP_PORT" | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "publish=$AZURACAST_HTTPS_PORT" | xargs -r docker rm -f 2>/dev/null || true
+    sleep 3
+    
     cd "$AZURACAST_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
     
     log_info "Baixando script de instalação do AzuraCast..."

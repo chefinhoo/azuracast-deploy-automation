@@ -233,6 +233,40 @@ check_port_available() {
     return 0
 }
 
+# Forçar liberação de porta matando containers que a usam
+force_free_port() {
+    local port="$1"
+    
+    log_info "Verificando porta $port..."
+    
+    # Procurar containers Docker usando a porta
+    local containers=$(docker ps -q --filter "publish=${port}" 2>/dev/null)
+    
+    if [ -n "$containers" ]; then
+        log_warn "Encontrados containers usando porta $port. Removendo..."
+        echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
+        sleep 2
+    fi
+    
+    # Verificar se ainda está em uso
+    if ! check_port_available "$port"; then
+        log_warn "Porta $port ainda em uso. Tentando identificar processo..."
+        
+        # Tentar identificar processo no host
+        local pid=$(ss -tlnp 2>/dev/null | grep ":${port} " | grep -oP 'pid=\K[0-9]+' | head -1)
+        
+        if [ -n "$pid" ]; then
+            log_warn "Processo $pid está usando porta $port"
+            ps -p "$pid" -o comm= 2>/dev/null || true
+        fi
+        
+        return 1
+    fi
+    
+    log_success "Porta $port está livre."
+    return 0
+}
+
 # Validar formato de domínio
 validate_domain() {
     local domain="$1"
