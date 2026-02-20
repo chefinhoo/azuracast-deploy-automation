@@ -293,6 +293,28 @@ EOF
     
     log_success "AzuraCast instalado!"
     
+    # Verificar if docker-compose.yml existe, caso contrário baixar
+    log_info "Verificando arquivo docker-compose.yml..."
+    if [ ! -f "$AZURACAST_DIR/docker-compose.yml" ]; then
+        log_info "Baixando docker-compose.yml do AzuraCast..."
+        if curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker-compose.yml \
+                -o "$AZURACAST_DIR/docker-compose.yml"; then
+            log_success "docker-compose.yml baixado com sucesso"
+        else
+            log_error "Falha ao baixar docker-compose.yml"
+            return 1
+        fi
+    else
+        log_success "docker-compose.yml encontrado"
+    fi
+    
+    # Verificar if docker-compose.override.yml existe
+    if [ ! -f "$AZURACAST_DIR/docker-compose.override.yml" ]; then
+        log_info "Baixando docker-compose.override.yml..."
+        curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker-compose.override.yml \
+            -o "$AZURACAST_DIR/docker-compose.override.yml" || log_warn "Arquivo override não encontrado (opcional)"
+    fi
+    
     # Verificar e corrigir portas no arquivo .env
     log_info "Verificando configuração de portas no arquivo .env..."
     if [ -f "$AZURACAST_DIR/.env" ]; then
@@ -338,6 +360,21 @@ EOF
     fi
     
     log_info "Aguardando serviços iniciarem..."
+    sleep 5
+    
+    # Iniciar containers do AzuraCast se estiverem parados
+    log_info "Iniciando containers do AzuraCast..."
+    if [ -f "$AZURACAST_DIR/docker-compose.yml" ]; then
+        if (cd "$AZURACAST_DIR" && docker compose up -d 2>/dev/null); then
+            log_success "Containers iniciados"
+            sleep 10
+        else
+            log_warn "Não conseguiu iniciar containers via docker compose"
+        fi
+    else
+        log_error "docker-compose.yml não encontrado. Não é possível iniciar containers"
+    fi
+    
     sleep 5
     
     # Verificar containers e portas

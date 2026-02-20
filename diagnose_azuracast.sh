@@ -1,7 +1,5 @@
 #!/bin/bash
-# Script para diagn
-
-osticar status do AzuraCast após instalação
+# Script para diagnosticar status do AzuraCast após instalação
 
 set -euo pipefail
 
@@ -42,8 +40,7 @@ else
 fi
 
 echo ""
-echo "5️⃣ Verificando logs 
-de instalação..."
+echo "5️⃣ Verificando logs de instalação..."
 if [ -f /var/log/azuracast-deploy.log ]; then
     echo "  ✓ Log de instalação encontrado"
     echo ""
