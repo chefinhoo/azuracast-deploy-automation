@@ -63,23 +63,33 @@ sudo bash scripts/install.sh
 
 ## Pós-instalação (Proxy Host)
 
-Após instalar, acesse o Nginx Proxy Manager:
+Após instalar, configure o proxy reverso para acessar via domínio com HTTPS.
 
-- `http://SEU_IP_PUBLICO:81`
+📖 **[Guia Completo de Configuração do Proxy](PROXY_SETUP.md)**
 
-Crie um Proxy Host com:
+### Configuração Rápida
 
-- **Domain Names:** `seudominio.com`
-- **Scheme:** `https`
-- **Forward Hostname/IP:** `localhost`
-- **Forward Port:** `8043`
-- **Websockets:** habilitado
+1. Acesse o Nginx Proxy Manager: `http://SEU_IP_PUBLICO:81`
+2. Login padrão: `admin@example.com` / `changeme`
+3. Crie um Proxy Host:
+   - **Domain Names:** `seudominio.com`
+   - **Scheme:** `http` ⚠️ (não https)
+   - **Forward Hostname/IP:** `localhost`
+   - **Forward Port:** `8080`
+   - **Websockets:** ✅ habilitado
+4. Na aba SSL: Solicite certificado Let's Encrypt
 
-Na aba SSL:
+### Diagnóstico de Problemas de Proxy
 
-- Solicite novo certificado Let’s Encrypt
-- Ative `Force SSL`
-- Ative `HTTP/2`
+Se tiver problemas ao configurar o proxy (erro "internal" ou 502):
+
+```bash
+cd azuracast-deploy-automation
+sudo bash diagnose_proxy.sh seu-dominio.com
+```
+
+Este script verifica automaticamente conectividade, portas e fornece a configuração recomendada.
+
 ## Ferramentas de Diagnóstico
 
 ### Verificar Status e Portas do AzuraCast
