@@ -20,20 +20,26 @@
 set -euo pipefail
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  echo "[ERRO] Execute como root (sudo)."
+  echo "[ERRO] Execute como root."
   exit 1
 fi
 
+# ---------------------------------------------------------
+# Dependências
+# ---------------------------------------------------------
 echo "[INFO] Atualizando pacotes..."
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg lsb-release software-properties-common
 
-# -------------------------------
-# Docker e Docker Compose Plugin
-# -------------------------------
-echo "[INFO] Instalando Docker e Docker Compose plugin..."
+# ---------------------------------------------------------
+# Docker
+# ---------------------------------------------------------
+echo "[INFO] Instalando Docker..."
 mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+fi
 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
@@ -44,21 +50,19 @@ apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plug
 
 systemctl enable --now docker
 
-# -------------------------------
-# Diretórios base
-# -------------------------------
+# ---------------------------------------------------------
+# Diretórios
+# ---------------------------------------------------------
 mkdir -p /var/proxy_manager
 mkdir -p /var/azuracast
 mkdir -p /var/www
 
-chown -R root:root /var/proxy_manager /var/azuracast /var/www
-
-# -------------------------------
+# ---------------------------------------------------------
 # Nginx Proxy Manager
-# -------------------------------
-echo "[INFO] Configurando Nginx Proxy Manager..."
+# ---------------------------------------------------------
+echo "[INFO] Subindo Nginx Proxy Manager..."
 
-cat > /var/proxy_manager/docker-compose.yml <<EOL
+cat > /var/proxy_manager/docker-compose.yml <<'EOL'
 version: "3"
 services:
   app:
@@ -82,10 +86,10 @@ services:
     image: mariadb:10.11
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: 'npm'
-      MYSQL_DATABASE: 'npm'
-      MYSQL_USER: 'npm'
-      MYSQL_PASSWORD: 'npm'
+      MYSQL_ROOT_PASSWORD: "npm"
+      MYSQL_DATABASE: "npm"
+      MYSQL_USER: "npm"
+      MYSQL_PASSWORD: "npm"
     volumes:
       - ./data/mysql:/var/lib/mysql
 EOL
@@ -93,10 +97,11 @@ EOL
 cd /var/proxy_manager
 docker compose up -d
 
-# -------------------------------
+# ---------------------------------------------------------
 # AzuraCast
-# -------------------------------
+# ---------------------------------------------------------
 echo "[INFO] Instalando AzuraCast..."
+
 cd /var/azuracast
 
 curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
@@ -109,14 +114,12 @@ export AZURACAST_STATION_PORT_END=9999
 
 yes '' | ./docker.sh install
 
-# -------------------------------
-# Override de portas
-# -------------------------------
-OVERRIDE_FILE="docker-compose.override.yml"
-
-if [ ! -f "$OVERRIDE_FILE" ]; then
-cat > "$OVERRIDE_FILE" <<EOL
-version: '3'
+# ---------------------------------------------------------
+# Override (somente se não existir)
+# ---------------------------------------------------------
+if [ ! -f docker-compose.override.yml ]; then
+cat > docker-compose.override.yml <<'EOL'
+version: "3.8"
 services:
   web:
     ports:
@@ -124,37 +127,46 @@ services:
       - "8043:443"
       - "9000-9999:9000-9999"
 EOL
-else
-sed -i "/ports:/a \      - '8080:80'\n      - '8043:443'\n      - '9000-9999:9000-9999'" "$OVERRIDE_FILE"
 fi
 
 docker compose down
 docker compose up -d
 
-# =========================================================
-# CRIAÇÃO DE VHOST PARA SITE ESTÁTICO
-# =========================================================
+# ---------------------------------------------------------
+# Container nginx para sites estáticos
+# ---------------------------------------------------------
+echo "[INFO] Preparando container de site estático..."
 
+if ! docker ps -a --format '{{.Names}}' | grep -q '^site-estatico$'; then
+
+  docker run -d \
+    --name site-estatico \
+    --restart unless-stopped \
+    -p 8085:80 \
+    -v /var/www:/var/www \
+    nginx:alpine
+
+else
+  docker start site-estatico >/dev/null || true
+fi
+
+# ---------------------------------------------------------
+# Criação de vhost
+# ---------------------------------------------------------
 echo
 echo "===================================================="
-echo "CONFIGURAÇÃO DE SITE ESTÁTICO (NGINX CONTAINER)"
+echo "CONFIGURAÇÃO DE SITE ESTÁTICO"
 echo "===================================================="
 echo
 
-read -rp "👉 Informe o domínio que deseja adicionar (ex: seudominio.com): " DOMINIO
+read -rp "👉 Informe o domínio (ex: seudominio.com): " DOMINIO
 
 if [ -z "$DOMINIO" ]; then
   echo "[ERRO] Domínio não informado."
   exit 1
 fi
 
-if ! docker ps --format '{{.Names}}' | grep -q '^site-estatico$'; then
-  echo "[ERRO] O container 'site-estatico' não está em execução."
-  echo "Crie primeiro o container do site estático."
-  exit 1
-fi
-
-echo "[INFO] Criando estrutura em /var/www/$DOMINIO ..."
+echo "[INFO] Criando estrutura /var/www/$DOMINIO"
 
 mkdir -p /var/www/$DOMINIO
 
@@ -163,7 +175,7 @@ cat > /var/www/$DOMINIO/index.html <<EOF
 <p>Site estático ativo.</p>
 EOF
 
-echo "[INFO] Criando vhost dentro do container site-estatico..."
+echo "[INFO] Criando vhost no container..."
 
 docker exec site-estatico sh -c "cat > /etc/nginx/conf.d/$DOMINIO.conf <<EOF
 server {
@@ -180,42 +192,56 @@ server {
     index index.html;
 
     location / {
-        try_files \\\$uri \\\$uri/ =404;
+        try_files \\$uri \\$uri/ =404;
     }
 }
-EOF
+EOF"
 
-nginx -t && nginx -s reload
-"
+docker exec site-estatico nginx -t
+docker exec site-estatico nginx -s reload
 
-# -------------------------------
-# Mensagens finais
-# -------------------------------
-
-PUBLIC_IP=\$(curl -s https://ifconfig.me || true)
+# ---------------------------------------------------------
+# Final
+# ---------------------------------------------------------
+PUBLIC_IP=$(curl -s https://ifconfig.me || true)
 
 echo
 echo "===================================================="
 echo "FINALIZADO"
 echo "===================================================="
 echo
-echo "Domínio criado: $DOMINIO"
+echo "Site estático criado: $DOMINIO"
 echo
-echo "✔ Acesso LOCAL para teste:"
+echo "✔ Teste local do site estático:"
 echo "  curl -H \"Host: $DOMINIO\" http://127.0.0.1:8085"
 echo
-echo "✔ O acesso direto por IP está BLOQUEADO:"
-echo "  http://$PUBLIC_IP:8085  -> bloqueado (return 444)"
-echo
-echo "✔ Agora vá ao Nginx Proxy Manager:"
+echo "✔ Painel do Nginx Proxy Manager:"
 echo "  http://$PUBLIC_IP:81"
 echo
-echo "Crie um Proxy Host:"
+echo "Crie um Proxy Host para o site estático:"
 echo "  Domain Names : $DOMINIO"
 echo "  Scheme       : http"
 echo "  Forward Host : $PUBLIC_IP"
 echo "  Forward Port : 8085"
 echo
-echo "Depois ative SSL normalmente."
+echo "----------------------------------------------------"
+echo "INSTRUÇÕES DO AZURACAST"
+echo "----------------------------------------------------"
+echo
+echo "Acesso direto (somente para configuração inicial):"
+echo "  http://$PUBLIC_IP:8080"
+echo
+echo "No Nginx Proxy Manager, crie um Proxy Host para o AzuraCast:"
+echo "  Domain Names : azura.seudominio.com"
+echo "  Scheme       : http"
+echo "  Forward Host : $PUBLIC_IP"
+echo "  Forward Port : 8080"
+echo
+echo "Depois gere o SSL e ative 'Force SSL'."
+echo
+echo "Portas configuradas no AzuraCast:"
+echo "  Painel HTTP  : 8080"
+echo "  Painel HTTPS : 8043 (uso interno)"
+echo "  Estações     : 9000 a 9999"
 echo
 echo "===================================================="
