@@ -14,11 +14,6 @@
 #   https://www.docker.com
 # =========================================================
 
-#!/bin/bash
-# install.sh - Instalação automática de AzuraCast + Nginx Proxy Manager
-# Autor: Danilo Ramos
-# Data: 2026-02-20
-
 set -e
 
 echo "[INFO] Atualizando pacotes e instalando dependências..."
