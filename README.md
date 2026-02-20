@@ -80,7 +80,37 @@ Na aba SSL:
 - Solicite novo certificado Let’s Encrypt
 - Ative `Force SSL`
 - Ative `HTTP/2`
+## Ferramentas de Diagnóstico
 
+### Verificar Status e Portas do AzuraCast
+
+Após a instalação, você pode verificar se o AzuraCast está usando as portas corretas:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash check_azuracast.sh
+```
+
+Este script mostra:
+- ✅ Configuração de portas no arquivo `.env`
+- ✅ Status de todos os containers Docker
+- ✅ Portas mapeadas do container web
+- ✅ Teste de conectividade HTTP
+- ✅ Comandos úteis para gerenciamento
+
+### Debugar Conflitos de Porta
+
+Se houver problemas com portas já em uso:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash debug_ports.sh
+```
+
+Este script identifica:
+- ❌ Processos usando as portas 8080, 8043, 9000
+- ❌ Containers Docker bloqueando portas
+- ✅ Comandos para liberar portas
 ## Desinstalação
 
 > ⚠️ Atenção: o processo abaixo remove **AzuraCast, Nginx Proxy Manager e Docker** do servidor.
