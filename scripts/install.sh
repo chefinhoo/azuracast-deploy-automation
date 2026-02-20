@@ -91,6 +91,11 @@ export AZURACAST_STATION_PORT_END=9999  # última porta de streaming
 # Instalação não interativa
 yes '' | ./docker.sh install
 
+echo "[INFO] Limpando arquivos temporários..."
+cd ~
+rm -rf azuracast-deploy-automation
+echo "[INFO] Instalação concluída e arquivos temporários removidos."
+
 echo "[INFO] AzuraCast instalado com sucesso!"
 echo "HTTP interno: 8080"
 echo "HTTPS interno: 8043"
