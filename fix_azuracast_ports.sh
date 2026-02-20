@@ -81,6 +81,24 @@ fi
 echo -e "${GREEN}✓ Arquivo .env atualizado${NC}"
 echo ""
 
+# Corrigir docker-compose.yml
+if [ -f "docker-compose.yml" ]; then
+    echo -e "${BLUE}🔧 Corrigindo docker-compose.yml...${NC}"
+    
+    # Fazer backup do docker-compose.yml
+    cp docker-compose.yml "docker-compose.yml.backup.$(date +%Y%m%d_%H%M%S)"
+    
+    # Remover portas hardcoded de estações (8000-8999)
+    sed -i '/^      - '\''[89][0-9]\{3\}:[89][0-9]\{3\}'\''/d' docker-compose.yml
+    
+    echo -e "${GREEN}✓ Portas hardcoded removidas do docker-compose.yml${NC}"
+    echo -e "${BLUE}ℹ As portas de estações ${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END} serão gerenciadas pelo AzuraCast${NC}"
+    echo ""
+else
+    echo -e "${YELLOW}⚠ docker-compose.yml não encontrado, pulando correção${NC}"
+    echo ""
+fi
+
 # Mostrar nova configuração
 echo -e "${BLUE}⚙️  Nova configuração:${NC}"
 echo ""

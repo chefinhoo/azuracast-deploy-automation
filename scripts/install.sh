@@ -321,6 +321,22 @@ EOF
         log_success "Arquivo azuracast.env existe"
     fi
     
+    # Corrigir portas de estações hardcoded no docker-compose.yml
+    log_info "Corrigindo portas de estações no docker-compose.yml..."
+    if [ -f "$AZURACAST_DIR/docker-compose.yml" ]; then
+        # Fazer backup do docker-compose.yml
+        cp "$AZURACAST_DIR/docker-compose.yml" "$AZURACAST_DIR/docker-compose.yml.backup-$(date +%Y%m%d-%H%M%S)"
+        
+        # Remover todas as linhas de portas hardcoded de estações (formato: - '8000:8000')
+        # Manter apenas as portas principais (HTTP, HTTPS, SFTP)
+        sed -i '/^      - '\''[89][0-9]\{3\}:[89][0-9]\{3\}'\''/d' "$AZURACAST_DIR/docker-compose.yml"
+        
+        log_success "Portas hardcoded removidas do docker-compose.yml"
+        log_info "As portas de estações ${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END} serão gerenciadas pelo AzuraCast automaticamente"
+    else
+        log_warn "docker-compose.yml não encontrado, pulando correção de portas"
+    fi
+    
     # Verificar e corrigir portas no arquivo .env
     log_info "Verificando configuração de portas no arquivo .env..."
     if [ -f "$AZURACAST_DIR/.env" ]; then
