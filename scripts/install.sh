@@ -9,15 +9,20 @@
 # 
 # This script installs and configures:
 # Este script instala e configura:
-# - AzuraCast © AzuraCast Contributors (Apache 2.0)
+# - AzuraCast (Apache 2.0)
 #   https://www.azuracast.com
-# - Nginx Proxy Manager © Jamie Curnow (MIT License)
+# - Nginx Proxy Manager (MIT)
 #   https://nginxproxymanager.com
-# - Docker © Docker, Inc. (Apache 2.0)
+# - Docker (Apache 2.0)
 #   https://www.docker.com
 # =========================================================
 
-set -e
+set -euo pipefail
+
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  echo "[ERRO] Execute como root (sudo). / [ERROR] Run as root (sudo)."
+  exit 1
+fi
 
 echo "[INFO] Atualizando pacotes e instalando dependências... / Updating packages and installing dependencies..."
 apt-get update -qq

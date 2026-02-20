@@ -129,6 +129,14 @@ Softwares de terceiros instalados pelos scripts possuem licenças próprias:
 - Nginx Proxy Manager — MIT
 - Docker — Apache 2.0
 
+Páginas oficiais:
+
+- AzuraCast: https://www.azuracast.com
+- Nginx Proxy Manager: https://nginxproxymanager.com
+- Docker: https://www.docker.com
+
+Este projeto não é afiliado, endossado ou mantido pelos projetos acima. Nomes e marcas pertencem aos seus respectivos titulares.
+
 ---
 
 ## 🇺🇸 English
@@ -250,3 +258,11 @@ Third-party software installed by the scripts has its own licenses:
 - AzuraCast — Apache 2.0
 - Nginx Proxy Manager — MIT
 - Docker — Apache 2.0
+
+Official pages:
+
+- AzuraCast: https://www.azuracast.com
+- Nginx Proxy Manager: https://nginxproxymanager.com
+- Docker: https://www.docker.com
+
+This project is not affiliated with, endorsed by, or maintained by the projects above. Names and trademarks belong to their respective owners.

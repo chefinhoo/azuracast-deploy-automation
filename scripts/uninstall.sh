@@ -9,11 +9,11 @@
 # 
 # This script removes installations of:
 # Este script remove instalações de:
-# - AzuraCast © AzuraCast Contributors (Apache 2.0)
+# - AzuraCast (Apache 2.0)
 #   https://www.azuracast.com
-# - Nginx Proxy Manager © Jamie Curnow (MIT License)
+# - Nginx Proxy Manager (MIT)
 #   https://nginxproxymanager.com
-# - Docker © Docker, Inc. (Apache 2.0)
+# - Docker (Apache 2.0)
 #   https://www.docker.com
 # =========================================================
 
