@@ -293,26 +293,19 @@ EOF
     
     log_success "AzuraCast instalado!"
     
-    # Verificar if docker-compose.yml existe, caso contrário baixar
+    # O docker.sh deveria ter criado docker-compose.yml, mas caso não tenha, baixar do repositório
     log_info "Verificando arquivo docker-compose.yml..."
     if [ ! -f "$AZURACAST_DIR/docker-compose.yml" ]; then
-        log_info "Baixando docker-compose.yml do AzuraCast..."
-        if curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker-compose.yml \
+        log_info "Arquivo docker-compose.yml não encontrado. Baixando docker-compose.sample.yml..."
+        if curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker-compose.sample.yml \
                 -o "$AZURACAST_DIR/docker-compose.yml"; then
-            log_success "docker-compose.yml baixado com sucesso"
+            log_success "docker-compose.yml baixado e configurado com sucesso"
         else
-            log_error "Falha ao baixar docker-compose.yml"
+            log_error "Falha ao baixar docker-compose.sample.yml"
             return 1
         fi
     else
         log_success "docker-compose.yml encontrado"
-    fi
-    
-    # Verificar if docker-compose.override.yml existe
-    if [ ! -f "$AZURACAST_DIR/docker-compose.override.yml" ]; then
-        log_info "Baixando docker-compose.override.yml..."
-        curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker-compose.override.yml \
-            -o "$AZURACAST_DIR/docker-compose.override.yml" || log_warn "Arquivo override não encontrado (opcional)"
     fi
     
     # Verificar e corrigir portas no arquivo .env
