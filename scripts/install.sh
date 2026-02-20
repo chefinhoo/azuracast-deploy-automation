@@ -1,6 +1,6 @@
 #!/bin/bash
 # =========================================================
-# Script de remoção completa do AzuraCast + Nginx Proxy Manager
+# Script de instalação automatizada do AzuraCast + Nginx Proxy Manager
 # 
 # Copyright (c) 2026 Danilo Ramos
 # Licensed under MIT License (automation script only)
@@ -41,7 +41,6 @@ docker version
 mkdir -p /var/proxy_manager
 mkdir -p /var/azuracast
 
-# Ajuste de permissões (root é mais seguro)
 chown -R root:root /var/proxy_manager /var/azuracast
 
 # -------------------------------
@@ -93,7 +92,7 @@ cd /var/azuracast
 curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/main/docker.sh -o docker.sh
 chmod +x docker.sh
 
-# Define portas internas (HTTP/HTTPS na faixa 8000-8999, streaming 9000-9999)
+# Define portas internas
 export AZURACAST_HTTP_PORT=8080
 export AZURACAST_HTTPS_PORT=8043
 export AZURACAST_STATION_PORT=9000
@@ -122,13 +121,18 @@ else
     sed -i "/ports:/a \      - '8080:80'\n      - '8043:443'\n      - '9000-9999:9000-9999'" "$OVERRIDE_FILE"
 fi
 
-# Reinicia o AzuraCast para aplicar portas
+# Reinicia AzuraCast para aplicar portas
 docker compose down
 docker compose up -d
 
+# -------------------------------
+# Limpeza e mensagem final
+# -------------------------------
 echo "[INFO] Limpando arquivos temporários..."
 cd ~
 rm -rf azuracast-deploy-automation
+
+PUBLIC_IP=$(curl -s https://ifconfig.me)
 
 echo "[INFO] Instalação concluída e arquivos temporários removidos."
 echo "[INFO] AzuraCast instalado com sucesso!"
@@ -144,10 +148,10 @@ echo -e "\n===================================================="
 echo "PRÓXIMOS PASSOS RECOMENDADOS:"
 echo ""
 echo "1️⃣ Acesse o Nginx Proxy Manager GUI:"
-echo "   http://<IP_DO_SERVIDOR>:81"
+echo "   http://$PUBLIC_IP:81"
 echo ""
 echo "2️⃣ Crie um Proxy Host:"
-echo "   - Domain Names: azura.daniloramos.dev.br"
+echo "   - Domain Names: seudominio.com"
 echo "   - Scheme: https"
 echo "   - Forward Hostname/IP: localhost"
 echo "   - Forward Port: 8043 (HTTPS AzuraCast)"
