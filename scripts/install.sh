@@ -258,23 +258,35 @@ setup_azuracast() {
     
     chmod +x docker.sh || { log_error "Falha ao configurar permissões"; return 1; }
     
-    log_info "Configurando variáveis de ambiente para o AzuraCast..."
-    log_info "HTTP Port: $AZURACAST_HTTP_PORT"
-    log_info "HTTPS Port: $AZURACAST_HTTPS_PORT"
-    log_info "Station Ports: $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
-    
-    # Configurar variáveis de ambiente para o instalador do AzuraCast
-    export AZURACAST_HTTP_PORT="$AZURACAST_HTTP_PORT"
-    export AZURACAST_HTTPS_PORT="$AZURACAST_HTTPS_PORT"
-    export AZURACAST_SFTP_PORT="2022"
-    export AZURACAST_STATION_PORTS="${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}"
-    export LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
-    export BEHIND_PROXY="true"
+    log_info "Configurando instalação automatizada do AzuraCast..."
+    log_info "Idioma: Português do Brasil (pt_BR)"
+    log_info "Porta HTTP: $AZURACAST_HTTP_PORT"
+    log_info "Porta HTTPS: $AZURACAST_HTTPS_PORT"
+    log_info "Porta SFTP: 2022"
+    log_info "Portas de Estações: $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
     
     log_info "Executando instalação do AzuraCast..."
     log_info "O instalador usará as portas configuradas automaticamente."
     
-    if ! ./docker.sh install; then
+    # Preparar respostas para o instalador interativo
+    # 1. Idioma: pt_BR
+    # 2. Personalizar portas: yes
+    # 3. Porta HTTP: $AZURACAST_HTTP_PORT
+    # 4. Porta HTTPS: $AZURACAST_HTTPS_PORT
+    # 5. Porta SFTP: 2022
+    # 6. Porta Station mínima: $AZURACAST_STATION_PORT_START
+    # 7. Porta Station máxima: $AZURACAST_STATION_PORT_END
+    cat <<EOF | ./docker.sh install
+pt_BR
+yes
+${AZURACAST_HTTP_PORT}
+${AZURACAST_HTTPS_PORT}
+2022
+${AZURACAST_STATION_PORT_START}
+${AZURACAST_STATION_PORT_END}
+EOF
+    
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
         log_error "Falha durante instalação do AzuraCast."
         return 1
     fi
