@@ -345,8 +345,12 @@ EOF
     log_info "Verificando configuração de portas..."
     if [ -f "$AZURACAST_DIR/.env" ]; then
         log_info "Configuração de portas no arquivo .env:"
-        grep -E "^(AZURACAST_HTTP_PORT|AZURACAST_HTTPS_PORT|AZURACAST_SFTP_PORT|AZURACAST_STATION_PORTS)" "$AZURACAST_DIR/.env" 2>/dev/null || \
-            log_warn "Variáveis de porta não encontradas no .env"
+        echo ""
+        grep "^AZURACAST_HTTP_PORT=" "$AZURACAST_DIR/.env" 2>/dev/null || echo "  AZURACAST_HTTP_PORT=não encontrado"
+        grep "^AZURACAST_HTTPS_PORT=" "$AZURACAST_DIR/.env" 2>/dev/null || echo "  AZURACAST_HTTPS_PORT=não encontrado"
+        grep "^AZURACAST_SFTP_PORT=" "$AZURACAST_DIR/.env" 2>/dev/null || echo "  AZURACAST_SFTP_PORT=não encontrado"
+        grep "^AZURACAST_STATION_PORTS=" "$AZURACAST_DIR/.env" 2>/dev/null || echo "  AZURACAST_STATION_PORTS=não encontrado"
+        echo ""
     fi
     
     # Verificar container web

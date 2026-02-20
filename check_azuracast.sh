@@ -32,9 +32,35 @@ echo ""
 echo -e "${BLUE}⚙️  Configuração de Portas (.env):${NC}"
 if [ -f ".env" ]; then
     echo ""
-    grep -E "^(AZURACAST_HTTP_PORT|AZURACAST_HTTPS_PORT|AZURACAST_SFTP_PORT|AZURACAST_STATION_PORTS)" .env 2>/dev/null | while IFS='=' read -r key value; do
-        echo "  $key = $value"
-    done
+    
+    # HTTP Port
+    if grep -q "^AZURACAST_HTTP_PORT=" .env 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} AZURACAST_HTTP_PORT = $(grep "^AZURACAST_HTTP_PORT=" .env | cut -d= -f2)"
+    else
+        echo -e "  ${RED}✗${NC} AZURACAST_HTTP_PORT = não encontrado"
+    fi
+    
+    # HTTPS Port
+    if grep -q "^AZURACAST_HTTPS_PORT=" .env 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} AZURACAST_HTTPS_PORT = $(grep "^AZURACAST_HTTPS_PORT=" .env | cut -d= -f2)"
+    else
+        echo -e "  ${RED}✗${NC} AZURACAST_HTTPS_PORT = não encontrado"
+    fi
+    
+    # SFTP Port
+    if grep -q "^AZURACAST_SFTP_PORT=" .env 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} AZURACAST_SFTP_PORT = $(grep "^AZURACAST_SFTP_PORT=" .env | cut -d= -f2)"
+    else
+        echo -e "  ${YELLOW}⚠${NC} AZURACAST_SFTP_PORT = não encontrado"
+    fi
+    
+    # Station Ports
+    if grep -q "^AZURACAST_STATION_PORTS=" .env 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} AZURACAST_STATION_PORTS = $(grep "^AZURACAST_STATION_PORTS=" .env | cut -d= -f2)"
+    else
+        echo -e "  ${RED}✗${NC} AZURACAST_STATION_PORTS = não encontrado"
+    fi
+    
     echo ""
 else
     echo -e "${RED}  ❌ Arquivo .env não encontrado${NC}"
