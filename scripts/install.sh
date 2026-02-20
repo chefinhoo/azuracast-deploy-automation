@@ -48,6 +48,11 @@ install_docker() {
         return 0
     fi
     
+    # Remover configurações antigas do Docker ANTES de atualizar pacotes
+    log_info "Removendo configurações antigas do Docker..."
+    rm -f /etc/apt/sources.list.d/docker.list
+    rm -f /etc/apt/keyrings/docker.gpg
+    
     log_info "Atualizando pacotes do sistema..."
     apt-get update -qq || { log_error "Falha ao atualizar pacotes"; return 1; }
     
@@ -57,10 +62,6 @@ install_docker() {
 
     
     log_info "Configurando repositório do Docker..."
-    
-    # Remover configurações antigas do Docker se existirem
-    rm -f /etc/apt/sources.list.d/docker.list
-    rm -f /etc/apt/keyrings/docker.gpg
     
     # Criar diretório para chaves
     mkdir -p /etc/apt/keyrings
