@@ -292,6 +292,30 @@ EOF
     fi
     
     log_success "AzuraCast instalado com sucesso!"
+    log_info "Aguardando serviços iniciarem..."
+    sleep 5
+    
+    # Verificar containers e portas
+    log_info "Verificando containers do AzuraCast..."
+    show_containers_status
+    
+    # Verificar portas configuradas
+    log_info "Verificando configuração de portas..."
+    if [ -f "$AZURACAST_DIR/.env" ]; then
+        log_info "Configuração de portas no arquivo .env:"
+        grep -E "^(AZURACAST_HTTP_PORT|AZURACAST_HTTPS_PORT|AZURACAST_SFTP_PORT|AZURACAST_STATION_PORTS)" "$AZURACAST_DIR/.env" 2>/dev/null || \
+            log_warn "Variáveis de porta não encontradas no .env"
+    fi
+    
+    # Verificar container web
+    local web_container=$(docker ps --filter "name=azuracast" --filter "status=running" --format "{{.Names}}" | grep -E "azuracast|web" | head -1)
+    if [ -n "$web_container" ]; then
+        log_success "Container web encontrado: $web_container"
+        check_container_ports "$web_container"
+    else
+        log_warn "Container web do AzuraCast não encontrado em execução"
+    fi
+    
     log_info "Aguarde alguns minutos para os serviços iniciarem completamente."
     
     return 0

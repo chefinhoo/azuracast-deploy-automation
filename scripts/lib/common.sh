@@ -393,6 +393,28 @@ cleanup_cache() {
     apt-get autoclean 2>/dev/null || true
 }
 
+# Verificar portas de um container
+check_container_ports() {
+    local container_name="$1"
+    
+    if ! docker ps --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        log_warn "Container $container_name não está rodando"
+        return 1
+    fi
+    
+    log_info "Portas do container $container_name:"
+    docker port "$container_name" 2>/dev/null || log_warn "Nenhuma porta exposta"
+    return 0
+}
+
+# Mostrar status de todos os containers
+show_containers_status() {
+    log_info "Status dos containers Docker:"
+    echo ""
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null
+    echo ""
+}
+
 # ==========================================================
 # FUNÇÕES DE ENTRADA
 # ==========================================================
