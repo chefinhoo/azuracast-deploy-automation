@@ -285,33 +285,6 @@ services:
       - BEHIND_PROXY=true
       - PREFER_RELEASE_BUILDS=stable
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
-    networks:
-      - default
-
-  mariadb:
-    restart: unless-stopped
-    healthcheck:
-      interval: 20s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    restart: unless-stopped
-    healthcheck:
-      interval: 20s
-      timeout: 5s
-      retries: 5
-
-networks:
-  default:
-    name: azuracast_network
-    driver: bridge
 EOL
     
     log_info "Parando serviços do AzuraCast..."
