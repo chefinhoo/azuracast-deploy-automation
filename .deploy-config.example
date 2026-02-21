@@ -143,6 +143,11 @@ PUBLIC_IP=""
 # Block direct IP access to AzuraCast ports (1 = yes, 0 = no)
 BLOCK_DIRECT_AZURACAST_ACCESS=1
 
+# Desativar totalmente o hardening de rede durante instalação (1 = sim, 0 = não)
+# Disable network hardening during installation (1 = yes, 0 = no)
+# Útil para ambientes de teste/laboratório.
+DISABLE_NETWORK_HARDENING=0
+
 # Interface de rede para aplicar as regras de firewall (vazio = auto detectar)
 # Network interface used for firewall rules (empty = auto detect)
 FIREWALL_INTERFACE=""

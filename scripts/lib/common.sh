@@ -142,6 +142,7 @@ load_config() {
     USE_IPV6="${USE_IPV6:=0}"
     PUBLIC_IP="${PUBLIC_IP:-}"
     BLOCK_DIRECT_AZURACAST_ACCESS="${BLOCK_DIRECT_AZURACAST_ACCESS:=1}"
+    DISABLE_NETWORK_HARDENING="${DISABLE_NETWORK_HARDENING:=0}"
     FIREWALL_INTERFACE="${FIREWALL_INTERFACE:-}"
     
     # Carregar arquivo de configuração se existir
@@ -182,6 +183,7 @@ show_config() {
     echo "   Solicitar Domínio:   $PROMPT_FOR_DOMAIN"
     echo "   Instalação Limpa:    $FORCE_FRESH_INSTALL"
     echo "   Bloquear acesso IP:  $BLOCK_DIRECT_AZURACAST_ACCESS"
+    echo "   Desativar hardening: $DISABLE_NETWORK_HARDENING"
     echo
 }
 

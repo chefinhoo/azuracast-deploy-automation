@@ -7,7 +7,7 @@ Este guia ajuda a configurar o Nginx Proxy Manager para trabalhar com o AzuraCas
 Antes de adicionar o proxy, execute o script de diagnóstico:
 
 ```bash
-cd ~/azuracast-deploy-automation
+cd /opt/azuracast-deploy-automation
 sudo bash diagnose_proxy.sh azura.daniloramos.dev.br
 ```
 
@@ -39,7 +39,7 @@ Vá em **Hosts** → **Proxy Hosts** → **Add Proxy Host**
 |-------|-------------------|
 | **Domain Names** | `azura.daniloramos.dev.br` |
 | **Scheme** | `http` ⚠️ (não https) |
-| **Forward Hostname / IP** | `localhost` ou `azuracast` |
+| **Forward Hostname / IP** | `azuracast` |
 | **Forward Port** | `8080` |
 | **Cache Assets** | ✅ Marcado |
 | **Block Common Exploits** | ✅ Marcado |
@@ -134,13 +134,25 @@ proxy_set_header X-Forwarded-Proto $scheme;
 proxy_set_header X-Real-IP $remote_addr;
 ```
 
-### Usar IP do Container em vez de localhost
+### Quando o NPM não encontra o AzuraCast
 
-Se `localhost` não funcionar, use o IP do container:
+Em instalação com Docker, o NPM também roda em container.
+Nesse cenário, `localhost` aponta para o próprio NPM (não para o AzuraCast).
+
+Use sempre `azuracast` no campo **Forward Hostname / IP**.
+
+Se necessário, conecte o NPM na mesma rede do AzuraCast:
+
+```bash
+docker network connect azuracast_default nginx-proxy-manager
+docker exec nginx-proxy-manager sh -lc 'curl -I --max-time 8 http://azuracast:8080'
+```
+
+Como fallback, você pode usar o IP do container AzuraCast:
 
 ```bash
 # Obter IP do container AzuraCast
-docker inspect azuracast | grep '"IPAddress"' | head -1
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' azuracast
 ```
 
 Use esse IP no campo **Forward Hostname / IP**.
@@ -159,7 +171,7 @@ Depois de configurado, teste:
 Execute o diagnóstico completo:
 
 ```bash
-cd ~/azuracast-deploy-automation
+cd /opt/azuracast-deploy-automation
 sudo bash diagnose_proxy.sh azura.daniloramos.dev.br
 ```
 

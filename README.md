@@ -54,6 +54,27 @@ O script de remoção:
 - Portas necessárias liberadas no firewall/security group
 - Domínio apontando para o IP público do servidor (para SSL com Let’s Encrypt)
 
+## Configuração opcional (.deploy-config)
+
+Você pode customizar comportamento e portas copiando o arquivo de exemplo:
+
+```bash
+cp .deploy-config.example .deploy-config
+```
+
+Para ambiente de teste/laboratório, desative hardening de rede:
+
+```bash
+DISABLE_NETWORK_HARDENING=1
+```
+
+Para produção, mantenha:
+
+```bash
+DISABLE_NETWORK_HARDENING=0
+BLOCK_DIRECT_AZURACAST_ACCESS=1
+```
+
 ## Instalação
 
 ```bash
@@ -75,10 +96,13 @@ Após instalar, configure o proxy reverso para acessar via domínio com HTTPS.
 3. Crie um Proxy Host:
    - **Domain Names:** `seudominio.com`
    - **Scheme:** `http` ⚠️ (não https)
-   - **Forward Hostname/IP:** `localhost`
+   - **Forward Hostname/IP:** `azuracast`
    - **Forward Port:** `8080`
    - **Websockets:** ✅ habilitado
 4. Na aba SSL: Solicite certificado Let's Encrypt
+
+> ℹ️ Se o NPM estiver em container Docker, não use `localhost`.
+> Use o hostname do serviço (`azuracast`) e garanta que o container `nginx-proxy-manager` esteja na rede `azuracast_default`.
 
 ### WordPress (provisionado automaticamente)
 
@@ -268,6 +292,27 @@ The uninstall script:
 - Required ports open in firewall/security group
 - Domain pointing to server public IP (for Let’s Encrypt SSL)
 
+## Optional Configuration (.deploy-config)
+
+You can customize behavior and ports by copying the example file:
+
+```bash
+cp .deploy-config.example .deploy-config
+```
+
+For test/lab environments, disable network hardening:
+
+```bash
+DISABLE_NETWORK_HARDENING=1
+```
+
+For production, keep:
+
+```bash
+DISABLE_NETWORK_HARDENING=0
+BLOCK_DIRECT_AZURACAST_ACCESS=1
+```
+
 ## Installation
 
 ```bash
@@ -285,10 +330,13 @@ After installation, open Nginx Proxy Manager:
 Create a Proxy Host with:
 
 - **Domain Names:** `yourdomain.com`
-- **Scheme:** `https`
-- **Forward Hostname/IP:** `localhost`
-- **Forward Port:** `8043`
+- **Scheme:** `http`
+- **Forward Hostname/IP:** `azuracast`
+- **Forward Port:** `8080`
 - **Websockets:** enabled
+
+> ℹ️ If NPM runs in Docker, avoid `localhost`.
+> Use the service hostname (`azuracast`) and ensure `nginx-proxy-manager` is attached to the `azuracast_default` network.
 
 In the SSL tab:
 

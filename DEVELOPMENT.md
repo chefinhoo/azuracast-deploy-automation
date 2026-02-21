@@ -105,6 +105,9 @@ backup_directory "$AZURACAST_DIR" || {
 ENABLE_CUSTOM_SERVICE=1
 CUSTOM_SERVICE_PORT=9000
 CUSTOM_SERVICE_VERSION="latest"
+
+# Em ambiente de teste (opcional)
+DISABLE_NETWORK_HARDENING=1
 ```
 
 ### 2. Carregar em install.sh:

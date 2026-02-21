@@ -511,9 +511,58 @@ EOF
 }
 
 # ==========================================================
+# CONECTAR NPM À REDE DO AZURACAST
+# ==========================================================
+connect_npm_to_azuracast_network() {
+    log_info "Conectando Nginx Proxy Manager à rede do AzuraCast..."
+
+    if ! docker ps --format '{{.Names}}' | grep -qx "nginx-proxy-manager"; then
+        log_warn "Container nginx-proxy-manager não está em execução. Pulando conexão de rede."
+        return 0
+    fi
+
+    if ! docker ps --format '{{.Names}}' | grep -qx "azuracast"; then
+        log_warn "Container azuracast não está em execução. Pulando conexão de rede."
+        return 0
+    fi
+
+    local azuracast_network
+    azuracast_network="$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' azuracast 2>/dev/null | head -1 | tr -d '[:space:]')"
+
+    if [ -z "$azuracast_network" ]; then
+        log_warn "Não foi possível identificar a rede do AzuraCast."
+        return 0
+    fi
+
+    if docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' nginx-proxy-manager 2>/dev/null | grep -qx "$azuracast_network"; then
+        log_success "Nginx Proxy Manager já está conectado à rede: $azuracast_network"
+    else
+        if docker network connect "$azuracast_network" nginx-proxy-manager 2>/dev/null; then
+            log_success "Nginx Proxy Manager conectado à rede: $azuracast_network"
+        else
+            log_warn "Falha ao conectar Nginx Proxy Manager na rede $azuracast_network"
+            return 0
+        fi
+    fi
+
+    if docker exec nginx-proxy-manager sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://azuracast:${AZURACAST_HTTP_PORT}" 2>/dev/null | grep -Eq '^(200|301|302)$'; then
+        log_success "Conectividade interna NPM -> azuracast:${AZURACAST_HTTP_PORT} validada"
+    else
+        log_warn "Não foi possível validar conectividade NPM -> azuracast:${AZURACAST_HTTP_PORT}. Verifique manualmente."
+    fi
+
+    return 0
+}
+
+# ==========================================================
 # HARDENING DE REDE
 # ==========================================================
 apply_azuracast_network_hardening() {
+    if [ "${DISABLE_NETWORK_HARDENING:-0}" = "1" ]; then
+        log_info "Hardening de rede desativado para ambiente de teste (DISABLE_NETWORK_HARDENING=1)."
+        return 0
+    fi
+
     if [ "${BLOCK_DIRECT_AZURACAST_ACCESS:-1}" != "1" ]; then
         log_info "Bloqueio de acesso direto por IP desativado (BLOCK_DIRECT_AZURACAST_ACCESS=0)."
         return 0
@@ -532,6 +581,10 @@ apply_azuracast_network_hardening() {
         local rule_args=()
         if [ -n "$iface" ]; then
             rule_args=( -i "$iface" )
+        elif [ "$chain" = "INPUT" ]; then
+            # Não bloquear tráfego local (localhost/loopback).
+            # Mantém testes com curl http://127.0.0.1:<porta> funcionando.
+            rule_args=( ! -i lo )
         fi
 
         if iptables -C "$chain" "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
@@ -545,6 +598,7 @@ apply_azuracast_network_hardening() {
     add_drop_rule_v6() {
         local chain="$1"
         local port_spec="$2"
+        local rule_args=()
 
         if ! command_exists ip6tables; then
             return 0
@@ -554,10 +608,17 @@ apply_azuracast_network_hardening() {
             return 0
         fi
 
-        if ip6tables -C "$chain" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
+        if [ -n "$iface" ]; then
+            rule_args=( -i "$iface" )
+        elif [ "$chain" = "INPUT" ]; then
+            # Preservar tráfego local IPv6 (::1/loopback)
+            rule_args=( ! -i lo )
+        fi
+
+        if ip6tables -C "$chain" "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
             log_debug "Regra IPv6 já existe em $chain para porta(s): $port_spec"
         else
-            ip6tables -I "$chain" 1 -p tcp --dport "$port_spec" -j DROP
+            ip6tables -I "$chain" 1 "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP
             log_info "Regra IPv6 aplicada em $chain para bloquear porta(s): $port_spec"
         fi
     }
@@ -582,7 +643,8 @@ apply_azuracast_network_hardening() {
     add_drop_rule "9000:9999"
     add_drop_rule "$STATIC_SITE_PORT"
 
-    log_success "Hardening aplicado: acesso direto por IP às portas do AzuraCast e sites foi bloqueado."
+    log_success "Hardening aplicado: acesso direto externo por IP às portas do AzuraCast e sites foi bloqueado."
+    log_info "Tráfego local via localhost/loopback permanece liberado para diagnóstico."
     log_info "Para persistir após reboot: apt-get install -y iptables-persistent && netfilter-persistent save"
     return 0
 }
@@ -748,7 +810,8 @@ display_summary() {
     if [ -n "$domain" ]; then
         echo "   - $domain → http://$public_ip:$STATIC_SITE_PORT"
     fi
-    echo "   - azura.seudominio.com → http://$public_ip:$AZURACAST_HTTP_PORT"
+    echo "   - azura.seudominio.com → http://azuracast:$AZURACAST_HTTP_PORT"
+    echo "     (No NPM em Docker, prefira 'azuracast' em vez de localhost/IP público)"
     echo "3. Gerar certificados SSL com Let's Encrypt"
     echo "4. Ativar 'Force SSL' nos Proxy Hosts"
     echo
@@ -788,6 +851,7 @@ main() {
     install_docker || { log_error "Instalação do Docker falhou"; exit 1; }
     setup_nginx_proxy_manager || { log_error "Setup Nginx Proxy Manager falhou"; exit 1; }
     setup_azuracast || { log_error "Setup AzuraCast falhou"; exit 1; }
+    connect_npm_to_azuracast_network || log_warn "Não foi possível conectar NPM à rede do AzuraCast"
     apply_azuracast_network_hardening || log_warn "Hardening de rede não foi aplicado"
     setup_static_site || { log_error "Setup WordPress falhou"; exit 1; }
     
