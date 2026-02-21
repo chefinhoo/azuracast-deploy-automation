@@ -18,6 +18,7 @@ O script de instalação:
 - Instala Docker Engine e Docker Compose Plugin
 - Sobe o Nginx Proxy Manager em `/var/proxy_manager`
 - Baixa e instala o AzuraCast em `/var/azuracast`
+- Provisiona um stack WordPress (app + MariaDB) no domínio informado
 - Define portas internas do AzuraCast para uso com proxy reverso
 - Reinicia os serviços para aplicar o mapeamento de portas
 
@@ -78,6 +79,21 @@ Após instalar, configure o proxy reverso para acessar via domínio com HTTPS.
    - **Forward Port:** `8080`
    - **Websockets:** ✅ habilitado
 4. Na aba SSL: Solicite certificado Let's Encrypt
+
+### WordPress (provisionado automaticamente)
+
+Após informar o domínio durante a instalação, o script cria um stack WordPress em `/var/www/SEU_DOMINIO` e expõe na porta `8085`.
+
+No Nginx Proxy Manager:
+
+- **Domain Names:** `seudominio.com`
+- **Scheme:** `http`
+- **Forward Hostname/IP:** `SEU_IP_DO_SERVIDOR`
+- **Forward Port:** `8085`
+
+As credenciais do banco do WordPress ficam em:
+
+- `/var/www/SEU_DOMINIO/wordpress-credentials.txt`
 
 ### Diagnóstico de Problemas de Proxy
 

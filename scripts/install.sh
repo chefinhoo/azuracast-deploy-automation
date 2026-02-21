@@ -489,12 +489,11 @@ EOF
 }
 
 # ==========================================================
-# SITE ESTÁTICO
+# WORDPRESS
 # ==========================================================
 setup_static_site() {
-    log_info "Configurando container de site estático..."
+    log_info "Preparando ambiente WordPress..."
     
-    # Verificar porta
     if ! check_port_available "$STATIC_SITE_PORT"; then
         log_error "Porta $STATIC_SITE_PORT já está em uso."
         return 1
@@ -502,109 +501,82 @@ setup_static_site() {
     
     mkdir -p "$WEB_ROOT" || { log_error "Falha ao criar diretório"; return 1; }
     
-    # Verificar se container já existe
-    if docker ps -a --format '{{.Names}}' | grep -q '^site-estatico$'; then
-        log_info "Container 'site-estatico' já existe. Iniciando..."
-        docker start site-estatico >/dev/null 2>&1 || true
-    else
-        log_info "Criando container de site estático..."
-        docker run -d \
-            --name site-estatico \
-            --restart unless-stopped \
-            -p "$STATIC_SITE_PORT:80" \
-            -v "$WEB_ROOT:$WEB_ROOT" \
-            nginx:alpine || { log_error "Falha ao criar container"; return 1; }
-    fi
-    
-    log_success "Site estático container pronto."
+    log_success "Ambiente WordPress preparado."
     return 0
 }
 
 # ==========================================================
-# CRIAR VHOST
+# CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
-    print_section "CONFIGURAÇÃO DE SITE ESTÁTICO"
+    print_section "CONFIGURAÇÃO DE WORDPRESS"
     
     local domain=$(prompt_domain)
     
     local domain_path="$WEB_ROOT/$domain"
     log_info "Criando estrutura em $domain_path"
-    mkdir -p "$domain_path" || { log_error "Falha ao criar diretório"; return 1; }
-    
-    # Criar index.html padrão
-    cat > "$domain_path/index.html" <<EOF || { log_error "Falha ao criar index.html"; return 1; }
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>$domain</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 50px; }
-        h1 { color: #333; }
-    </style>
-</head>
-<body>
-    <h1>$domain</h1>
-    <p>Site estático ativo via AzuraCast Deploy Automation</p>
-</body>
-</html>
+    mkdir -p "$domain_path/html" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
+
+    local wp_db_name="wordpress"
+    local wp_db_user="wordpress"
+    local wp_db_password
+    local wp_db_root_password
+    wp_db_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+    wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+
+    local wp_compose_file="$domain_path/docker-compose.yml"
+    cat > "$wp_compose_file" <<EOF || { log_error "Falha ao criar docker-compose do WordPress"; return 1; }
+services:
+  wp-db:
+    image: mariadb:10.11
+    container_name: wp-db-${domain//./-}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
+      MYSQL_DATABASE: ${wp_db_name}
+      MYSQL_USER: ${wp_db_user}
+      MYSQL_PASSWORD: ${wp_db_password}
+    volumes:
+      - ./db_data:/var/lib/mysql
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    container_name: wp-app-${domain//./-}
+    restart: unless-stopped
+    depends_on:
+      - wp-db
+    ports:
+      - "${STATIC_SITE_PORT}:80"
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_NAME: ${wp_db_name}
+      WORDPRESS_DB_USER: ${wp_db_user}
+      WORDPRESS_DB_PASSWORD: ${wp_db_password}
+    volumes:
+      - ./html:/var/www/html
 EOF
-    
-    log_info "Configurando Nginx com domínio $domain..."
-    
-    # Criar arquivo de configuração temporário
-    local temp_nginx_conf="/tmp/nginx-${domain}.conf"
-    cat > "$temp_nginx_conf" <<'NGINX_EOF'
-server {
-    listen 80 default_server;
-    server_name _;
-    return 444;
-}
 
-server {
-    listen 80;
-    server_name DOMAIN_PLACEHOLDER www.DOMAIN_PLACEHOLDER;
-
-    root DOMAIN_PATH_PLACEHOLDER;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ =404;
-    }
-
-    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-}
-NGINX_EOF
-    
-    # Substituir placeholders - usar | como delimiter
-    # Escapar caracteres especiais (/,#,\) no domínio
-    sed -i "s|DOMAIN_PLACEHOLDER|$(printf '%s\n' "$domain" | sed -e 's/[\/&#]/\\&/g')|g" "$temp_nginx_conf"
-    sed -i "s|DOMAIN_PATH_PLACEHOLDER|$(printf '%s\n' "$domain_path" | sed -e 's/[\/&#]/\\&/g')|g" "$temp_nginx_conf"
-    
-    # Copiar para o container
-    if ! docker cp "$temp_nginx_conf" "site-estatico:/etc/nginx/conf.d/${domain}.conf"; then
-        log_error "Falha ao criar config Nginx"
-        rm -f "$temp_nginx_conf"
+    log_info "Iniciando stack WordPress..."
+    if ! (cd "$domain_path" && docker compose up -d); then
+        log_error "Falha ao iniciar stack WordPress"
         return 1
     fi
-    
-    rm -f "$temp_nginx_conf"
-    
-    log_info "Testando configuração Nginx..."
-    if ! docker exec site-estatico nginx -t > /dev/null 2>&1; then
-        log_error "Erro na configuração Nginx."
-        return 1
-    fi
-    
-    log_info "Recarregando Nginx..."
-    docker exec site-estatico nginx -s reload || { log_error "Falha ao recarregar Nginx"; return 1; }
-    
-    log_success "Site estático '$domain' criado com sucesso."
+
+    local creds_file="$domain_path/wordpress-credentials.txt"
+    cat > "$creds_file" <<EOF || { log_error "Falha ao salvar credenciais do WordPress"; return 1; }
+DOMAIN=${domain}
+WORDPRESS_URL=http://${domain}
+WORDPRESS_CONTAINER=wp-app-${domain//./-}
+WORDPRESS_DB_CONTAINER=wp-db-${domain//./-}
+WORDPRESS_DB_NAME=${wp_db_name}
+WORDPRESS_DB_USER=${wp_db_user}
+WORDPRESS_DB_PASSWORD=${wp_db_password}
+WORDPRESS_DB_ROOT_PASSWORD=${wp_db_root_password}
+EOF
+
+    chmod 600 "$creds_file" || true
+
+    log_success "WordPress '$domain' configurado com sucesso."
     echo "$domain" > /tmp/deployed_domain
     return 0
 }
@@ -621,8 +593,9 @@ display_summary() {
     print_info_box "✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO"
     
     if [ -n "$domain" ]; then
-        echo "📝 Site Estático: $domain"
+        echo "📝 WordPress: $domain"
         echo "   Diretório: $WEB_ROOT/$domain"
+        echo "   Credenciais DB: $WEB_ROOT/$domain/wordpress-credentials.txt"
         echo "   Teste: curl -H 'Host: $domain' http://127.0.0.1:${STATIC_SITE_PORT}"
         echo
     fi
@@ -684,7 +657,7 @@ main() {
     install_docker || { log_error "Instalação do Docker falhou"; exit 1; }
     setup_nginx_proxy_manager || { log_error "Setup Nginx Proxy Manager falhou"; exit 1; }
     setup_azuracast || { log_error "Setup AzuraCast falhou"; exit 1; }
-    setup_static_site || { log_error "Setup site estático falhou"; exit 1; }
+    setup_static_site || { log_error "Setup WordPress falhou"; exit 1; }
     
     # Criar vhost (opcional)
     if [ "${PROMPT_FOR_DOMAIN:-1}" = "1" ]; then
