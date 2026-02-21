@@ -88,8 +88,9 @@ if [ -f "docker-compose.yml" ]; then
     # Fazer backup do docker-compose.yml
     cp docker-compose.yml "docker-compose.yml.backup.$(date +%Y%m%d_%H%M%S)"
     
-    # Remover portas hardcoded de estações (8000-8999)
-    sed -i '/^      - '\''[89][0-9]\{3\}:[89][0-9]\{3\}'\''/d' docker-compose.yml
+    # Remover apenas portas hardcoded de estações (9000-9999)
+    # Não remover portas principais (HTTP/HTTPS/SFTP)
+    sed -i '/^      - '\''9[0-9]\{3\}:9[0-9]\{3\}'\''/d' docker-compose.yml
     
     echo -e "${GREEN}✓ Portas hardcoded removidas do docker-compose.yml${NC}"
     echo -e "${BLUE}ℹ As portas de estações ${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END} serão gerenciadas pelo AzuraCast${NC}"

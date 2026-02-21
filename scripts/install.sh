@@ -327,9 +327,9 @@ EOF
         # Fazer backup do docker-compose.yml
         cp "$AZURACAST_DIR/docker-compose.yml" "$AZURACAST_DIR/docker-compose.yml.backup-$(date +%Y%m%d-%H%M%S)"
         
-        # Remover todas as linhas de portas hardcoded de estações (formato: - '8000:8000')
-        # Manter apenas as portas principais (HTTP, HTTPS, SFTP)
-        sed -i '/^      - '\''[89][0-9]\{3\}:[89][0-9]\{3\}'\''/d' "$AZURACAST_DIR/docker-compose.yml"
+        # Remover apenas portas hardcoded de estações (9000-9999)
+        # Não remover portas principais (HTTP/HTTPS/SFTP)
+        sed -i '/^      - '\''9[0-9]\{3\}:9[0-9]\{3\}'\''/d' "$AZURACAST_DIR/docker-compose.yml"
         
         log_success "Portas hardcoded removidas do docker-compose.yml"
         log_info "As portas de estações ${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END} serão gerenciadas pelo AzuraCast automaticamente"
@@ -363,16 +363,9 @@ EOF
             
             log_success "Portas corrigidas no arquivo .env"
             
-            # Reiniciar containers para aplicar novas portas
-            log_info "Reiniciando containers para aplicar novas portas..."
-            if [ -f "$AZURACAST_DIR/docker-compose.yml" ]; then
-                (cd "$AZURACAST_DIR" && docker compose down > /dev/null 2>&1 || true)
-                sleep 3
-                (cd "$AZURACAST_DIR" && docker compose up -d > /dev/null 2>&1) || log_warn "Aviso ao reiniciar containers"
-                sleep 5
-            else
-                log_warn "Arquivo docker-compose.yml não encontrado em $AZURACAST_DIR"
-            fi
+            # Evitar down/up imediato aqui para não interromper bootstrap inicial do MariaDB.
+            # A subida/reconciliação dos containers acontece no bloco "Iniciando containers do AzuraCast".
+            log_info "Alterações no .env serão aplicadas na próxima subida/reconciliação dos containers."
         else
             log_success "Portas no .env estão corretas!"
         fi
