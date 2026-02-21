@@ -275,14 +275,18 @@ setup_azuracast() {
     log_info "O instalador usará as portas configuradas automaticamente."
     
     # Preparar respostas para o instalador interativo
-    # 1. Idioma: pt_BR
-    # 2. Personalizar portas: yes
-    # 3. Porta HTTP: $AZURACAST_HTTP_PORT
-    # 4. Porta HTTPS: $AZURACAST_HTTPS_PORT
-    # 5. Porta SFTP: 2022
-    # 6. Porta Station mínima: $AZURACAST_STATION_PORT_START
-    # 7. Porta Station máxima: $AZURACAST_STATION_PORT_END
+    # 1. Release channel: não trocar (n)
+    # 2. Idioma: pt_BR
+    # 3. Personalizar portas: yes
+    # 4. Porta HTTP: $AZURACAST_HTTP_PORT
+    # 5. Porta HTTPS: $AZURACAST_HTTPS_PORT
+    # 6. Porta SFTP: 2022
+    # 7. Porta Station mínima: $AZURACAST_STATION_PORT_START
+    # 8. Porta Station máxima: $AZURACAST_STATION_PORT_END
+    # 9. Atualizações de imagem via web: yes
+    # 10. Bloqueio de bots/rastreadores: no
     cat <<EOF | ./docker.sh install
+n
 pt_BR
 yes
 ${AZURACAST_HTTP_PORT}
@@ -290,6 +294,8 @@ ${AZURACAST_HTTPS_PORT}
 2022
 ${AZURACAST_STATION_PORT_START}
 ${AZURACAST_STATION_PORT_END}
+yes
+no
 EOF
     
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
