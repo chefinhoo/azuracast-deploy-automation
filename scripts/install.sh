@@ -507,14 +507,6 @@ apply_azuracast_network_hardening() {
     fi
 
     local iface="${FIREWALL_INTERFACE:-}"
-    if [ -z "$iface" ]; then
-        iface="$(ip route get 1.1.1.1 2>/dev/null | awk '{print $5; exit}')"
-    fi
-
-    if [ -z "$iface" ]; then
-        log_warn "Não foi possível detectar interface de rede externa. Pulando hardening de rede."
-        return 0
-    fi
 
     if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
         log_warn "Chain DOCKER-USER não encontrada. Pulando hardening de rede."
@@ -523,10 +515,15 @@ apply_azuracast_network_hardening() {
 
     add_drop_rule() {
         local port_spec="$1"
-        if iptables -C DOCKER-USER -i "$iface" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
+        local rule_args=()
+        if [ -n "$iface" ]; then
+            rule_args=( -i "$iface" )
+        fi
+
+        if iptables -C DOCKER-USER "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
             log_debug "Regra já existe para porta(s): $port_spec"
         else
-            iptables -I DOCKER-USER -i "$iface" -p tcp --dport "$port_spec" -j DROP
+            iptables -I DOCKER-USER 1 "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP
             log_info "Regra aplicada para bloquear acesso externo à porta(s): $port_spec"
         fi
     }
