@@ -217,6 +217,12 @@ EOL
 setup_azuracast() {
     log_info "Configurando AzuraCast..."
     
+    local station_ports_csv=""
+    station_ports_csv="$(generate_station_ports_csv "$AZURACAST_STATION_PORT_START" "$AZURACAST_STATION_PORT_END")" || {
+        log_error "Falha ao gerar lista de portas de estação"
+        return 1
+    }
+    
     log_info "Criando diretório da aplicação: $AZURACAST_DIR"
     mkdir -p "$AZURACAST_DIR" || { log_error "Falha ao criar diretório"; return 1; }
     
@@ -356,9 +362,27 @@ EOF
             
             # Se AZURACAST_STATION_PORTS não existir, adicionar
             if ! grep -q "^AZURACAST_STATION_PORTS=" "$AZURACAST_DIR/.env"; then
-                echo "AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}" >> "$AZURACAST_DIR/.env"
+                echo "AZURACAST_STATION_PORTS=${station_ports_csv}" >> "$AZURACAST_DIR/.env"
             else
-                sed -i "s/^AZURACAST_STATION_PORTS=.*/AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}/" "$AZURACAST_DIR/.env"
+                sed -i "s/^AZURACAST_STATION_PORTS=.*/AZURACAST_STATION_PORTS=${station_ports_csv}/" "$AZURACAST_DIR/.env"
+            fi
+
+            if grep -q "^AZURACAST_VERSION=" "$AZURACAST_DIR/.env"; then
+                sed -i "s/^AZURACAST_VERSION=.*/AZURACAST_VERSION=stable/" "$AZURACAST_DIR/.env"
+            else
+                echo "AZURACAST_VERSION=stable" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if ! grep -q "^COMPOSE_PROJECT_NAME=" "$AZURACAST_DIR/.env"; then
+                echo "COMPOSE_PROJECT_NAME=azuracast" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if ! grep -q "^COMPOSE_HTTP_TIMEOUT=" "$AZURACAST_DIR/.env"; then
+                echo "COMPOSE_HTTP_TIMEOUT=300" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if ! grep -q "^NGINX_TIMEOUT=" "$AZURACAST_DIR/.env"; then
+                echo "NGINX_TIMEOUT=1800" >> "$AZURACAST_DIR/.env"
             fi
             
             log_success "Portas corrigidas no arquivo .env"
@@ -368,6 +392,31 @@ EOF
             log_info "Alterações no .env serão aplicadas na próxima subida/reconciliação dos containers."
         else
             log_success "Portas no .env estão corretas!"
+
+            # Garantir valores essenciais mesmo quando as portas já estiverem corretas.
+            if grep -q "^AZURACAST_VERSION=" "$AZURACAST_DIR/.env"; then
+                sed -i "s/^AZURACAST_VERSION=.*/AZURACAST_VERSION=stable/" "$AZURACAST_DIR/.env"
+            else
+                echo "AZURACAST_VERSION=stable" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if ! grep -q "^COMPOSE_PROJECT_NAME=" "$AZURACAST_DIR/.env"; then
+                echo "COMPOSE_PROJECT_NAME=azuracast" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if ! grep -q "^COMPOSE_HTTP_TIMEOUT=" "$AZURACAST_DIR/.env"; then
+                echo "COMPOSE_HTTP_TIMEOUT=300" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if ! grep -q "^NGINX_TIMEOUT=" "$AZURACAST_DIR/.env"; then
+                echo "NGINX_TIMEOUT=1800" >> "$AZURACAST_DIR/.env"
+            fi
+
+            if grep -q "^AZURACAST_STATION_PORTS=" "$AZURACAST_DIR/.env"; then
+                sed -i "s/^AZURACAST_STATION_PORTS=.*/AZURACAST_STATION_PORTS=${station_ports_csv}/" "$AZURACAST_DIR/.env"
+            else
+                echo "AZURACAST_STATION_PORTS=${station_ports_csv}" >> "$AZURACAST_DIR/.env"
+            fi
         fi
     else
         log_error "Arquivo .env não encontrado!"

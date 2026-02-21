@@ -17,6 +17,37 @@ AZURACAST_HTTPS_PORT="${AZURACAST_HTTPS_PORT:-8043}"
 AZURACAST_STATION_PORT_START="${AZURACAST_STATION_PORT_START:-9000}"
 AZURACAST_STATION_PORT_END="${AZURACAST_STATION_PORT_END:-9999}"
 
+generate_station_ports_csv() {
+    local start_port="$1"
+    local end_port="$2"
+    local ports=()
+    local base
+    local candidate
+
+    for ((base=start_port; base<=end_port; base+=10)); do
+        for offset in 0 5 6; do
+            candidate=$((base + offset))
+            if [ "$candidate" -ge "$start_port" ] && [ "$candidate" -le "$end_port" ]; then
+                ports+=("$candidate")
+            fi
+        done
+    done
+
+    local joined=""
+    local item
+    for item in "${ports[@]}"; do
+        if [ -z "$joined" ]; then
+            joined="$item"
+        else
+            joined="$joined,$item"
+        fi
+    done
+
+    printf '%s\n' "$joined"
+}
+
+STATION_PORTS_CSV="$(generate_station_ports_csv "$AZURACAST_STATION_PORT_START" "$AZURACAST_STATION_PORT_END")"
+
 echo "========================================="
 echo "Corrigir Portas do AzuraCast"
 echo "========================================="
@@ -50,7 +81,7 @@ echo -e "${YELLOW}🔧 Nova configuração a ser aplicada:${NC}"
 echo "  AZURACAST_HTTP_PORT=$AZURACAST_HTTP_PORT"
 echo "  AZURACAST_HTTPS_PORT=$AZURACAST_HTTPS_PORT"
 echo "  AZURACAST_SFTP_PORT=2022"
-echo "  AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}"
+echo "  AZURACAST_STATION_PORTS=${STATION_PORTS_CSV}"
 echo ""
 
 # Confirmar
@@ -73,9 +104,9 @@ sed -i "s/^AZURACAST_HTTP_PORT=.*/AZURACAST_HTTP_PORT=${AZURACAST_HTTP_PORT}/" .
 sed -i "s/^AZURACAST_HTTPS_PORT=.*/AZURACAST_HTTPS_PORT=${AZURACAST_HTTPS_PORT}/" .env
 
 if ! grep -q "^AZURACAST_STATION_PORTS=" .env; then
-    echo "AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}" >> .env
+    echo "AZURACAST_STATION_PORTS=${STATION_PORTS_CSV}" >> .env
 else
-    sed -i "s/^AZURACAST_STATION_PORTS=.*/AZURACAST_STATION_PORTS=${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END}/" .env
+    sed -i "s/^AZURACAST_STATION_PORTS=.*/AZURACAST_STATION_PORTS=${STATION_PORTS_CSV}/" .env
 fi
 
 echo -e "${GREEN}✓ Arquivo .env atualizado${NC}"

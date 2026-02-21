@@ -233,6 +233,47 @@ check_port_available() {
     return 0
 }
 
+# Gerar portas de estação no formato CSV esperado pelo AzuraCast
+# Exemplo: 9000,9005,9006,9010,9015,9016...
+generate_station_ports_csv() {
+    local start_port="$1"
+    local end_port="$2"
+
+    if ! [[ "$start_port" =~ ^[0-9]+$ ]] || ! [[ "$end_port" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    if [ "$start_port" -gt "$end_port" ]; then
+        return 1
+    fi
+
+    local ports=()
+    local base
+    local candidate
+
+    for ((base=start_port; base<=end_port; base+=10)); do
+        for offset in 0 5 6; do
+            candidate=$((base + offset))
+            if [ "$candidate" -ge "$start_port" ] && [ "$candidate" -le "$end_port" ]; then
+                ports+=("$candidate")
+            fi
+        done
+    done
+
+    local joined=""
+    local item
+    for item in "${ports[@]}"; do
+        if [ -z "$joined" ]; then
+            joined="$item"
+        else
+            joined="$joined,$item"
+        fi
+    done
+
+    printf '%s\n' "$joined"
+    return 0
+}
+
 # Forçar liberação de porta matando containers que a usam
 force_free_port() {
     local port="$1"
