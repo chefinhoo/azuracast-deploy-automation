@@ -24,7 +24,6 @@ set -euo pipefail
 # ==========================================================
 SCRIPT_FILE="${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_FILE")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Carregar biblioteca comum
 if [ ! -f "${SCRIPT_DIR}/lib/common.sh" ]; then
@@ -80,8 +79,10 @@ install_docker() {
     log_success "Chave GPG do Docker adicionada."
     
     # Configurar repositório do Docker
-    local arch=$(dpkg --print-architecture)
-    local distro=$(lsb_release -cs)
+    local arch
+    local distro
+    arch="$(dpkg --print-architecture)"
+    distro="$(lsb_release -cs)"
     echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/ubuntu ${distro} stable" \
         > /etc/apt/sources.list.d/docker.list || \
@@ -298,7 +299,7 @@ yes
 no
 EOF
     
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
         log_error "Falha durante instalação do AzuraCast."
         return 1
     fi
@@ -364,8 +365,10 @@ EOF
     log_info "Verificando configuração de portas no arquivo .env..."
     if [ -f "$AZURACAST_DIR/.env" ]; then
         # Verificar se as portas estão corretas
-        local current_http=$(grep "^AZURACAST_HTTP_PORT=" "$AZURACAST_DIR/.env" | cut -d= -f2)
-        local current_https=$(grep "^AZURACAST_HTTPS_PORT=" "$AZURACAST_DIR/.env" | cut -d= -f2)
+        local current_http
+        local current_https
+        current_http="$(grep "^AZURACAST_HTTP_PORT=" "$AZURACAST_DIR/.env" | cut -d= -f2)"
+        current_https="$(grep "^AZURACAST_HTTPS_PORT=" "$AZURACAST_DIR/.env" | cut -d= -f2)"
         
         if [ "$current_http" != "$AZURACAST_HTTP_PORT" ] || [ "$current_https" != "$AZURACAST_HTTPS_PORT" ]; then
             log_warn "Portas no .env não correspondem às configuradas. Corrigindo..."
@@ -475,7 +478,8 @@ EOF
     fi
     
     # Verificar container web
-    local web_container=$(docker ps --filter "name=azuracast" --filter "status=running" --format "{{.Names}}" | grep -E "azuracast|web" | head -1)
+    local web_container
+    web_container="$(docker ps --filter "name=azuracast" --filter "status=running" --format "{{.Names}}" | grep -E "azuracast|web" | head -1)"
     if [ -n "$web_container" ]; then
         log_success "Container web encontrado: $web_container"
         check_container_ports "$web_container"
@@ -562,7 +566,8 @@ setup_static_site() {
 create_vhost() {
     print_section "CONFIGURAÇÃO DE WORDPRESS"
     
-    local domain=$(prompt_domain)
+    local domain
+    domain="$(prompt_domain)"
     
     local domain_path="$WEB_ROOT/$domain"
     log_info "Criando estrutura em $domain_path"
@@ -639,7 +644,8 @@ display_summary() {
     local domain=""
     [ -f /tmp/deployed_domain ] && domain=$(cat /tmp/deployed_domain)
     
-    local public_ip=$(get_public_ip)
+    local public_ip
+    public_ip="$(get_public_ip)"
     
     print_info_box "✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO"
     
