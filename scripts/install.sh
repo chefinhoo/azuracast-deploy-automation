@@ -50,7 +50,25 @@ install_docker() {
     # Remover configurações antigas do Docker ANTES de atualizar pacotes
     log_info "Removendo configurações antigas do Docker..."
     rm -f /etc/apt/sources.list.d/docker.list
+    rm -f /etc/apt/sources.list.d/docker-ce.list
+    rm -f /etc/apt/sources.list.d/docker.sources
+    rm -f /etc/apt/sources.list.d/docker-ce.sources
     rm -f /etc/apt/keyrings/docker.gpg
+    rm -f /etc/apt/keyrings/docker.asc
+
+    # Limpar entradas antigas do Docker em arquivos .list/.sources para evitar erro NO_PUBKEY
+    if [ -d /etc/apt/sources.list.d ]; then
+        find /etc/apt/sources.list.d -type f \( -name "*.list" -o -name "*.sources" \) -print0 2>/dev/null | \
+            while IFS= read -r -d '' src_file; do
+                if grep -q "download\.docker\.com" "$src_file" 2>/dev/null; then
+                    sed -i '/download\.docker\.com/d' "$src_file" 2>/dev/null || true
+                fi
+            done
+    fi
+
+    if [ -f /etc/apt/sources.list ] && grep -q "download\.docker\.com" /etc/apt/sources.list 2>/dev/null; then
+        sed -i '/download\.docker\.com/d' /etc/apt/sources.list 2>/dev/null || true
+    fi
     
     log_info "Atualizando pacotes do sistema..."
     apt-get update -qq || { log_error "Falha ao atualizar pacotes"; return 1; }
