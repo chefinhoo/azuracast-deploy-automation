@@ -573,12 +573,40 @@ create_vhost() {
     log_info "Criando estrutura em $domain_path"
     mkdir -p "$domain_path/html" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
 
+    local creds_file
+    creds_file="$domain_path/wordpress-credentials.txt"
+
     local wp_db_name="wordpress"
     local wp_db_user="wordpress"
     local wp_db_password
     local wp_db_root_password
-    wp_db_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
-    wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+
+    if [ -f "$creds_file" ]; then
+        log_info "Credenciais existentes encontradas. Reutilizando para evitar conflito com banco persistente."
+
+        local loaded_db_name
+        local loaded_db_user
+        local loaded_db_password
+        local loaded_db_root_password
+
+        loaded_db_name="$(grep '^WORDPRESS_DB_NAME=' "$creds_file" | tail -1 | cut -d= -f2-)"
+        loaded_db_user="$(grep '^WORDPRESS_DB_USER=' "$creds_file" | tail -1 | cut -d= -f2-)"
+        loaded_db_password="$(grep '^WORDPRESS_DB_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2-)"
+        loaded_db_root_password="$(grep '^WORDPRESS_DB_ROOT_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2-)"
+
+        [ -n "$loaded_db_name" ] && wp_db_name="$loaded_db_name"
+        [ -n "$loaded_db_user" ] && wp_db_user="$loaded_db_user"
+        [ -n "$loaded_db_password" ] && wp_db_password="$loaded_db_password"
+        [ -n "$loaded_db_root_password" ] && wp_db_root_password="$loaded_db_root_password"
+    fi
+
+    if [ -z "${wp_db_password:-}" ]; then
+        wp_db_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+    fi
+
+    if [ -z "${wp_db_root_password:-}" ]; then
+        wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+    fi
 
     local wp_compose_file="$domain_path/docker-compose.yml"
     cat > "$wp_compose_file" <<EOF || { log_error "Falha ao criar docker-compose do WordPress"; return 1; }
@@ -618,7 +646,6 @@ EOF
         return 1
     fi
 
-    local creds_file="$domain_path/wordpress-credentials.txt"
     cat > "$creds_file" <<EOF || { log_error "Falha ao salvar credenciais do WordPress"; return 1; }
 DOMAIN=${domain}
 WORDPRESS_URL=http://${domain}
