@@ -508,24 +508,53 @@ apply_azuracast_network_hardening() {
 
     local iface="${FIREWALL_INTERFACE:-}"
 
-    if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
-        log_warn "Chain DOCKER-USER não encontrada. Pulando hardening de rede."
-        return 0
-    fi
-
-    add_drop_rule() {
-        local port_spec="$1"
+    add_drop_rule_v4() {
+        local chain="$1"
+        local port_spec="$2"
         local rule_args=()
         if [ -n "$iface" ]; then
             rule_args=( -i "$iface" )
         fi
 
-        if iptables -C DOCKER-USER "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
-            log_debug "Regra já existe para porta(s): $port_spec"
+        if iptables -C "$chain" "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
+            log_debug "Regra IPv4 já existe em $chain para porta(s): $port_spec"
         else
-            iptables -I DOCKER-USER 1 "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP
-            log_info "Regra aplicada para bloquear acesso externo à porta(s): $port_spec"
+            iptables -I "$chain" 1 "${rule_args[@]}" -p tcp --dport "$port_spec" -j DROP
+            log_info "Regra IPv4 aplicada em $chain para bloquear porta(s): $port_spec"
         fi
+    }
+
+    add_drop_rule_v6() {
+        local chain="$1"
+        local port_spec="$2"
+
+        if ! command_exists ip6tables; then
+            return 0
+        fi
+
+        if ! ip6tables -nL "$chain" >/dev/null 2>&1; then
+            return 0
+        fi
+
+        if ip6tables -C "$chain" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
+            log_debug "Regra IPv6 já existe em $chain para porta(s): $port_spec"
+        else
+            ip6tables -I "$chain" 1 -p tcp --dport "$port_spec" -j DROP
+            log_info "Regra IPv6 aplicada em $chain para bloquear porta(s): $port_spec"
+        fi
+    }
+
+    add_drop_rule() {
+        local port_spec="$1"
+
+        if iptables -nL DOCKER-USER >/dev/null 2>&1; then
+            add_drop_rule_v4 "DOCKER-USER" "$port_spec"
+        fi
+
+        add_drop_rule_v4 "INPUT" "$port_spec"
+
+        add_drop_rule_v6 "DOCKER-USER" "$port_spec"
+        add_drop_rule_v6 "INPUT" "$port_spec"
     }
 
     log_info "Aplicando hardening de rede para acesso somente via proxy/domínio..."
