@@ -19,8 +19,8 @@ PROXY_MANAGER_DIR="/var/proxy_manager"
 # Directory for AzuraCast
 AZURACAST_DIR="/var/azuracast"
 
-# Raiz para sites estáticos
-# Root directory for static sites
+# Raiz para sites WordPress
+# Root directory for WordPress sites
 WEB_ROOT="/var/www"
 
 # ==========================================================
@@ -60,11 +60,11 @@ AZURACAST_STATION_PORT_START=9000
 AZURACAST_STATION_PORT_END=9999
 
 # ==========================================================
-# PORTAS - SITE ESTÁTICO
+# PORTAS - WORDPRESS
 # ==========================================================
 
-# Porta para container Nginx de site estático
-# Port for static site Nginx container
+# Porta para container do WordPress
+# Port for WordPress container
 STATIC_SITE_PORT=8085
 
 # ==========================================================
@@ -138,5 +138,13 @@ USE_IPV6=0
 # IP público a usar em exibições (deixar vazio para detectar automaticamente)
 # Public IP to use in displays (leave empty to auto-detect)
 PUBLIC_IP=""
+
+# Bloquear acesso direto por IP às portas do AzuraCast (1 = sim, 0 = não)
+# Block direct IP access to AzuraCast ports (1 = yes, 0 = no)
+BLOCK_DIRECT_AZURACAST_ACCESS=1
+
+# Interface de rede para aplicar as regras de firewall (vazio = auto detectar)
+# Network interface used for firewall rules (empty = auto detect)
+FIREWALL_INTERFACE=""
 
 # ==========================================================

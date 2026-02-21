@@ -17,6 +17,7 @@ install.sh (ou uninstall.sh)
         ├── install_docker()
         ├── setup_nginx_proxy_manager()
         ├── setup_azuracast()
+        ├── apply_azuracast_network_hardening()
         ├── setup_static_site()
         └── create_vhost()
 ```

@@ -175,7 +175,7 @@ show_config() {
     echo "   AzuraCast HTTP: $AZURACAST_HTTP_PORT"
     echo "   AzuraCast HTTPS:$AZURACAST_HTTPS_PORT"
     echo "   Estações:       $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
-    echo "   Site Estático:  $STATIC_SITE_PORT"
+    echo "   WordPress:      $STATIC_SITE_PORT"
     echo
     echo "⚙️  Comportamento:"
     echo "   Modo Verbose:        $VERBOSE_LOGGING"
