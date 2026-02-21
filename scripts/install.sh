@@ -489,6 +489,56 @@ EOF
 }
 
 # ==========================================================
+# HARDENING DE REDE
+# ==========================================================
+apply_azuracast_network_hardening() {
+    if [ "${BLOCK_DIRECT_AZURACAST_ACCESS:-1}" != "1" ]; then
+        log_info "Bloqueio de acesso direto por IP desativado (BLOCK_DIRECT_AZURACAST_ACCESS=0)."
+        return 0
+    fi
+
+    if ! command_exists iptables; then
+        log_warn "iptables não encontrado. Pulando hardening de rede."
+        return 0
+    fi
+
+    local iface="${FIREWALL_INTERFACE:-}"
+    if [ -z "$iface" ]; then
+        iface="$(ip route get 1.1.1.1 2>/dev/null | awk '{print $5; exit}')"
+    fi
+
+    if [ -z "$iface" ]; then
+        log_warn "Não foi possível detectar interface de rede externa. Pulando hardening de rede."
+        return 0
+    fi
+
+    if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
+        log_warn "Chain DOCKER-USER não encontrada. Pulando hardening de rede."
+        return 0
+    fi
+
+    add_drop_rule() {
+        local port_spec="$1"
+        if iptables -C DOCKER-USER -i "$iface" -p tcp --dport "$port_spec" -j DROP >/dev/null 2>&1; then
+            log_debug "Regra já existe para porta(s): $port_spec"
+        else
+            iptables -I DOCKER-USER -i "$iface" -p tcp --dport "$port_spec" -j DROP
+            log_info "Regra aplicada para bloquear acesso externo à porta(s): $port_spec"
+        fi
+    }
+
+    log_info "Aplicando hardening de rede para acesso somente via proxy/domínio..."
+    add_drop_rule "$AZURACAST_HTTP_PORT"
+    add_drop_rule "$AZURACAST_HTTPS_PORT"
+    add_drop_rule "2022"
+    add_drop_rule "9000:9999"
+
+    log_success "Hardening aplicado: acesso direto por IP às portas do AzuraCast foi bloqueado."
+    log_info "Para persistir após reboot: apt-get install -y iptables-persistent && netfilter-persistent save"
+    return 0
+}
+
+# ==========================================================
 # WORDPRESS
 # ==========================================================
 setup_static_site() {
@@ -609,6 +659,9 @@ display_summary() {
     echo "   URL direta: http://$public_ip:$AZURACAST_HTTP_PORT"
     echo "   Portas internas: $AZURACAST_HTTP_PORT (HTTP), $AZURACAST_HTTPS_PORT (HTTPS)"
     echo "   Streaming: portas $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
+    if [ "${BLOCK_DIRECT_AZURACAST_ACCESS:-1}" = "1" ]; then
+        echo "   Segurança: acesso direto por IP bloqueado (usar domínio/proxy)"
+    fi
     echo
     
     echo "----- PRÓXIMOS PASSOS -----"
@@ -657,6 +710,7 @@ main() {
     install_docker || { log_error "Instalação do Docker falhou"; exit 1; }
     setup_nginx_proxy_manager || { log_error "Setup Nginx Proxy Manager falhou"; exit 1; }
     setup_azuracast || { log_error "Setup AzuraCast falhou"; exit 1; }
+    apply_azuracast_network_hardening || log_warn "Hardening de rede não foi aplicado"
     setup_static_site || { log_error "Setup WordPress falhou"; exit 1; }
     
     # Criar vhost (opcional)
