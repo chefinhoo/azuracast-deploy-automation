@@ -333,9 +333,20 @@ EOF
         # Fazer backup do docker-compose.yml
         cp "$AZURACAST_DIR/docker-compose.yml" "$AZURACAST_DIR/docker-compose.yml.backup-$(date +%Y%m%d-%H%M%S)"
         
-        # Remover apenas portas hardcoded de estações (9000-9999)
-        # Não remover portas principais (HTTP/HTTPS/SFTP)
-        sed -i '/^      - '\''9[0-9]\{3\}:9[0-9]\{3\}'\''/d' "$AZURACAST_DIR/docker-compose.yml"
+        # Remover portas hardcoded de estações (8000-9999), preservando HTTP/HTTPS/SFTP.
+        # Isso evita que um docker-compose gerado com portas padrão (8000+) ignore o .env.
+        local compose_tmp="${AZURACAST_DIR}/docker-compose.yml.tmp"
+        awk -v http_port="$AZURACAST_HTTP_PORT" -v https_port="$AZURACAST_HTTPS_PORT" -v sftp_port="2022" '
+            {
+                if (match($0, /^[[:space:]]*-[[:space:]]'"'"'([0-9]{4}):([0-9]{4})'"'"'[[:space:]]*$/, m)) {
+                    port=m[1]+0
+                    if (port >= 8000 && port <= 9999 && port != http_port && port != https_port && port != sftp_port) {
+                        next
+                    }
+                }
+                print
+            }
+        ' "$AZURACAST_DIR/docker-compose.yml" > "$compose_tmp" && mv "$compose_tmp" "$AZURACAST_DIR/docker-compose.yml"
         
         log_success "Portas hardcoded removidas do docker-compose.yml"
         log_info "As portas de estações ${AZURACAST_STATION_PORT_START}-${AZURACAST_STATION_PORT_END} serão gerenciadas pelo AzuraCast automaticamente"
