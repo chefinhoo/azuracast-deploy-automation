@@ -532,8 +532,9 @@ apply_azuracast_network_hardening() {
     add_drop_rule "$AZURACAST_HTTPS_PORT"
     add_drop_rule "2022"
     add_drop_rule "9000:9999"
+    add_drop_rule "$STATIC_SITE_PORT"
 
-    log_success "Hardening aplicado: acesso direto por IP às portas do AzuraCast foi bloqueado."
+    log_success "Hardening aplicado: acesso direto por IP às portas do AzuraCast e sites foi bloqueado."
     log_info "Para persistir após reboot: apt-get install -y iptables-persistent && netfilter-persistent save"
     return 0
 }
@@ -660,7 +661,7 @@ display_summary() {
     echo "   Portas internas: $AZURACAST_HTTP_PORT (HTTP), $AZURACAST_HTTPS_PORT (HTTPS)"
     echo "   Streaming: portas $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
     if [ "${BLOCK_DIRECT_AZURACAST_ACCESS:-1}" = "1" ]; then
-        echo "   Segurança: acesso direto por IP bloqueado (usar domínio/proxy)"
+        echo "   Segurança: acesso direto por IP bloqueado para AzuraCast e sites (usar domínio/proxy)"
     fi
     echo
     
