@@ -13,6 +13,8 @@ A refatoração transformou os scripts de instalação/desinstalação do AzuraC
 | **Logging** | Simples (echo básico) | Completo com timestamps e níveis |
 | **Configuração** | Hardcoded | Arquivo `.deploy-config` |
 | **Validação** | Mínima | Robusta (domínio, portas, conectividade) |
+| **Provisionamento Web** | Site estático Nginx | WordPress + MariaDB por domínio |
+| **Segurança de Rede** | Sem hardening específico | Bloqueio opcional de acesso direto por IP |
 | **Health Checks** | Nenhum | Com timeouts configuráveis |
 | **Documentação** | README apenas | README + REFACTORING.md + DEVELOPMENT.md |
 
@@ -65,12 +67,14 @@ log_debug "Debug info"        # Cyan (apenas com VERBOSE_LOGGING=1)
 - Valores padrão funcionam sem configuração
 - 25+ opções configuráveis
 - Override via variáveis de ambiente
+- Flags de segurança de rede para hardening
 
 ```bash
 # Exemplo de customização
 NPM_ADMIN_PORT=8181
 AZURACAST_HTTP_PORT=9000
 VERBOSE_LOGGING=1
+BLOCK_DIRECT_AZURACAST_ACCESS=1
 ```
 
 ### 4. **Validação Robusta**
@@ -112,6 +116,11 @@ print_section, print_info_box, print_separator
 load_config, show_config, init_logging
 ```
 
+### 6. **Provisionamento WordPress no Fluxo**
+- Após informar domínio, o instalador cria stack WordPress (`wordpress:php8.2-apache`) + MariaDB dedicada.
+- Estrutura por domínio em `/var/www/DOMINIO`.
+- Credenciais do banco salvas em `wordpress-credentials.txt` com permissões restritas.
+
 ### 6. **Tratamento de Erros Melhorado**
 - **Antes**: Alguns comandos silenciosamente falhavam
 - **Depois**: Todos os erros são capturados e reportados
@@ -133,6 +142,11 @@ fi
 - Cores para diferentes tipos de mensagem
 - Status emojis (✓, ✗, ℹ, !)
 - Resumo visual ao final com próximos passos
+
+### 8. **Hardening de Rede Opcional**
+- Regras em `DOCKER-USER` bloqueiam acesso externo direto às portas do AzuraCast.
+- Mantém exposição principal via domínio/proxy reverso.
+- Configurável por `BLOCK_DIRECT_AZURACAST_ACCESS` e `FIREWALL_INTERFACE`.
 
 ## 📈 Estatísticas de Código
 

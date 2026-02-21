@@ -14,6 +14,7 @@ Este documento descreve as melhorias implementadas na refatoração dos scripts 
 - ✅ Verificação de privilégios no início
 - ✅ Tratamento adequado de erros em cada etapa
 - ✅ Health checks para containers antes de considerar sucesso
+- ✅ Hardening opcional de rede via `DOCKER-USER` para bloquear acesso direto por IP às portas do AzuraCast
 
 ### Logging Aprimorado
 - **Logging com Timestamp**: Todos os eventos incluem horário
@@ -25,6 +26,7 @@ Este documento descreve as melhorias implementadas na refatoração dos scripts 
 - **Arquivo `.deploy-config`**: Personalize portas, diretórios e comportamento
 - **Valores Padrão**: Funciona sem configuração para caso padrão
 - **Variáveis de Ambiente**: Suporte para override via `.deploy-config.example`
+- **Bloqueio de IP configurável**: `BLOCK_DIRECT_AZURACAST_ACCESS` e `FIREWALL_INTERFACE`
 
 ### Melhorias na Validação
 - ✅ Verifica distribuição (Ubuntu/Debian apenas)
@@ -100,6 +102,10 @@ AZURACAST_STATION_PORT_END=9999
 PROMPT_FOR_DOMAIN=1
 VERBOSE_LOGGING=0
 FORCE_FRESH_INSTALL=0
+
+# Segurança de rede
+BLOCK_DIRECT_AZURACAST_ACCESS=1
+FIREWALL_INTERFACE=""
 ```
 
 ## 🧪 Funções da Biblioteca Comum
@@ -149,8 +155,9 @@ main()
 ├── install_docker()         → Instala Docker
 ├── setup_nginx_proxy_manager() → NPM + MariaDB
 ├── setup_azuracast()        → AzuraCast
-├── setup_static_site()      → Container Nginx
-├── create_vhost()           → Cria domínio (opcional)
+├── apply_azuracast_network_hardening() → Bloqueia acesso direto por IP (opcional)
+├── setup_static_site()      → Prepara ambiente WordPress
+├── create_vhost()           → Provisiona stack WordPress para o domínio (opcional)
 └── display_summary()        → Exibe informações finais
 ```
 
