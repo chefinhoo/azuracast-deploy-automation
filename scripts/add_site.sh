@@ -1,0 +1,253 @@
+#!/bin/bash
+# =========================================================
+# Adicionar novo domínio (WordPress ou Site Estático)
+# =========================================================
+
+set -euo pipefail
+
+SCRIPT_FILE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_FILE")" && pwd)"
+
+if [ ! -f "${SCRIPT_DIR}/lib/common.sh" ]; then
+    echo "[ERRO] Biblioteca comum não encontrada: ${SCRIPT_DIR}/lib/common.sh" >&2
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/lib/common.sh"
+
+connect_npm_to_network() {
+    local network_name="$1"
+    local backend_host="$2"
+    local backend_port="$3"
+
+    if ! docker ps --format '{{.Names}}' | grep -qx "nginx-proxy-manager"; then
+        log_warn "Container nginx-proxy-manager não encontrado. Conecte manualmente na rede $network_name"
+        return 0
+    fi
+
+    if docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' nginx-proxy-manager 2>/dev/null | grep -qx "$network_name"; then
+        log_success "NPM já conectado à rede: $network_name"
+    else
+        if docker network connect "$network_name" nginx-proxy-manager 2>/dev/null; then
+            log_success "NPM conectado à rede: $network_name"
+        else
+            log_warn "Falha ao conectar NPM na rede $network_name"
+            return 0
+        fi
+    fi
+
+    if docker exec nginx-proxy-manager sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://${backend_host}:${backend_port}" 2>/dev/null | grep -Eq '^(200|301|302)$'; then
+        log_success "Conectividade interna validada: ${backend_host}:${backend_port}"
+    else
+        log_warn "Não foi possível validar conectividade para ${backend_host}:${backend_port}"
+    fi
+
+    return 0
+}
+
+provision_wordpress() {
+    local domain="$1"
+    local slug="${domain//./-}"
+    local domain_path="$WEB_ROOT/$domain"
+    local wp_container_name="wp-app-${slug}"
+    local wp_db_container_name="wp-db-${slug}"
+    local wp_network_name="wp-${slug}-network"
+    local creds_file="$domain_path/wordpress-credentials.txt"
+
+    local wp_db_name="wordpress"
+    local wp_db_user="wordpress"
+    local wp_db_password=""
+    local wp_db_root_password=""
+
+    log_info "Provisionando WordPress para $domain"
+    mkdir -p "$domain_path/html" "$domain_path/db_data"
+
+    if [ -f "$creds_file" ]; then
+        log_info "Credenciais existentes encontradas. Reutilizando..."
+        wp_db_name="$(grep '^WORDPRESS_DB_NAME=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+        wp_db_user="$(grep '^WORDPRESS_DB_USER=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+        wp_db_password="$(grep '^WORDPRESS_DB_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+        wp_db_root_password="$(grep '^WORDPRESS_DB_ROOT_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+
+        wp_db_name="${wp_db_name:-wordpress}"
+        wp_db_user="${wp_db_user:-wordpress}"
+    fi
+
+    if [ -z "$wp_db_password" ]; then
+        wp_db_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+    fi
+
+    if [ -z "$wp_db_root_password" ]; then
+        wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+    fi
+
+    cat > "$domain_path/docker-compose.yml" <<EOF
+services:
+  wp-db:
+    image: mariadb:10.11
+    container_name: ${wp_db_container_name}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
+      MYSQL_DATABASE: ${wp_db_name}
+      MYSQL_USER: ${wp_db_user}
+      MYSQL_PASSWORD: ${wp_db_password}
+    volumes:
+      - ./db_data:/var/lib/mysql
+    networks:
+      - wp_network
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    container_name: ${wp_container_name}
+    restart: unless-stopped
+    depends_on:
+      - wp-db
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_NAME: ${wp_db_name}
+      WORDPRESS_DB_USER: ${wp_db_user}
+      WORDPRESS_DB_PASSWORD: ${wp_db_password}
+    volumes:
+      - ./html:/var/www/html
+    networks:
+      - wp_network
+
+networks:
+  wp_network:
+    name: ${wp_network_name}
+    driver: bridge
+EOF
+
+    (cd "$domain_path" && docker compose up -d)
+
+    cat > "$creds_file" <<EOF
+DOMAIN=${domain}
+WORDPRESS_URL=http://${domain}
+WORDPRESS_CONTAINER=${wp_container_name}
+WORDPRESS_DB_CONTAINER=${wp_db_container_name}
+WORDPRESS_NETWORK=${wp_network_name}
+WORDPRESS_PROXY_HOST=${wp_container_name}
+WORDPRESS_PROXY_PORT=80
+WORDPRESS_DB_NAME=${wp_db_name}
+WORDPRESS_DB_USER=${wp_db_user}
+WORDPRESS_DB_PASSWORD=${wp_db_password}
+WORDPRESS_DB_ROOT_PASSWORD=${wp_db_root_password}
+EOF
+
+    chmod 600 "$creds_file" || true
+
+    connect_npm_to_network "$wp_network_name" "$wp_container_name" "80"
+
+    log_success "WordPress criado para $domain"
+    echo ""
+    echo "Configuração no NPM:"
+    echo "  Domain Names: $domain"
+    echo "  Scheme: http"
+    echo "  Forward Hostname/IP: $wp_container_name"
+    echo "  Forward Port: 80"
+}
+
+provision_static_site() {
+    local domain="$1"
+    local slug="${domain//./-}"
+    local domain_path="$WEB_ROOT/$domain"
+    local static_container_name="site-app-${slug}"
+    local static_network_name="site-${slug}-network"
+
+    log_info "Provisionando site estático para $domain"
+    mkdir -p "$domain_path/html"
+
+    if [ ! -f "$domain_path/html/index.html" ]; then
+        cat > "$domain_path/html/index.html" <<EOF
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>$domain</title>
+</head>
+<body>
+  <h1>Site estático ativo</h1>
+  <p>Domínio: $domain</p>
+</body>
+</html>
+EOF
+    fi
+
+    cat > "$domain_path/docker-compose.yml" <<EOF
+services:
+  static:
+    image: nginx:alpine
+    container_name: ${static_container_name}
+    restart: unless-stopped
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    networks:
+      - static_network
+
+networks:
+  static_network:
+    name: ${static_network_name}
+    driver: bridge
+EOF
+
+    (cd "$domain_path" && docker compose up -d)
+
+    connect_npm_to_network "$static_network_name" "$static_container_name" "80"
+
+    log_success "Site estático criado para $domain"
+    echo ""
+    echo "Configuração no NPM:"
+    echo "  Domain Names: $domain"
+    echo "  Scheme: http"
+    echo "  Forward Hostname/IP: $static_container_name"
+    echo "  Forward Port: 80"
+}
+
+main() {
+    init_logging || {
+        echo "[ERRO] Falha ao inicializar logging" >&2
+        exit 1
+    }
+
+    load_config
+
+    check_root || exit 1
+    check_distribution || exit 1
+
+    print_section "ADICIONAR NOVO DOMÍNIO"
+
+    local domain
+    domain="$(prompt_domain)"
+
+    echo ""
+    echo "Escolha o modelo do site para $domain:"
+    echo "  1) WordPress"
+    echo "  2) Site estático"
+
+    local option=""
+    while true; do
+        read -rp "Opção [1-2]: " option
+        case "$option" in
+            1)
+                provision_wordpress "$domain"
+                break
+                ;;
+            2)
+                provision_static_site "$domain"
+                break
+                ;;
+            *)
+                log_warn "Opção inválida. Escolha 1 ou 2."
+                ;;
+        esac
+    done
+
+    echo ""
+    log_success "Configuração concluída."
+    log_info "Depois, finalize SSL no Nginx Proxy Manager (Let's Encrypt + Force SSL)."
+}
+
+main "$@"

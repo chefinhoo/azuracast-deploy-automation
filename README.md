@@ -31,6 +31,7 @@ O script de remoção:
 ## Estrutura
 
 - `scripts/install.sh` — Instala AzuraCast + Nginx Proxy Manager
+- `scripts/add_site.sh` — Adiciona novo domínio (WordPress ou site estático)
 - `scripts/uninstall.sh` — Remove AzuraCast + Nginx Proxy Manager + Docker
 
 ## Portas utilizadas
@@ -83,6 +84,22 @@ cd azuracast-deploy-automation
 sudo bash scripts/install.sh
 ```
 
+## Adicionar novos domínios
+
+Para adicionar um novo domínio após a instalação, use o assistente interativo:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash scripts/add_site.sh
+```
+
+O script pergunta qual modelo você deseja provisionar:
+
+- `1` → WordPress (app + MariaDB)
+- `2` → Site estático (Nginx)
+
+Em ambos os casos, o backend é criado em rede interna Docker (sem porta pública), para uso via Nginx Proxy Manager.
+
 ## Pós-instalação (Proxy Host)
 
 Após instalar, configure o proxy reverso para acessar via domínio com HTTPS.
@@ -106,14 +123,17 @@ Após instalar, configure o proxy reverso para acessar via domínio com HTTPS.
 
 ### WordPress (provisionado automaticamente)
 
-Após informar o domínio durante a instalação, o script cria um stack WordPress em `/var/www/SEU_DOMINIO` e expõe na porta `8085`.
+Após informar o domínio durante a instalação, o script cria um stack WordPress em `/var/www/SEU_DOMINIO`.
+O acesso é feito via proxy interno (sem expor porta pública do WordPress).
 
 No Nginx Proxy Manager:
 
 - **Domain Names:** `seudominio.com`
 - **Scheme:** `http`
-- **Forward Hostname/IP:** `SEU_IP_DO_SERVIDOR`
-- **Forward Port:** `8085`
+- **Forward Hostname/IP:** `wp-app-seudominio-com`
+- **Forward Port:** `80`
+
+> ℹ️ O instalador conecta automaticamente o `nginx-proxy-manager` na rede Docker do WordPress.
 
 As credenciais do banco do WordPress ficam em:
 
@@ -269,6 +289,7 @@ The uninstall script:
 ## Structure
 
 - `scripts/install.sh` — Installs AzuraCast + Nginx Proxy Manager
+- `scripts/add_site.sh` — Adds a new domain (WordPress or static site)
 - `scripts/uninstall.sh` — Removes AzuraCast + Nginx Proxy Manager + Docker
 
 ## Ports in use
@@ -320,6 +341,22 @@ git clone https://github.com/chefinhoo/azuracast-deploy-automation.git
 cd azuracast-deploy-automation
 sudo bash scripts/install.sh
 ```
+
+## Add new domains
+
+To add a new domain after installation, use the interactive wizard:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash scripts/add_site.sh
+```
+
+The script asks which model you want to provision:
+
+- `1` → WordPress (app + MariaDB)
+- `2` → Static site (Nginx)
+
+In both cases, the backend is created on an internal Docker network (no public port), intended to be accessed via Nginx Proxy Manager.
 
 ## Post-install (Proxy Host)
 

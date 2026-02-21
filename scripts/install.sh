@@ -641,9 +641,8 @@ apply_azuracast_network_hardening() {
     add_drop_rule "$AZURACAST_HTTPS_PORT"
     add_drop_rule "2022"
     add_drop_rule "9000:9999"
-    add_drop_rule "$STATIC_SITE_PORT"
 
-    log_success "Hardening aplicado: acesso direto externo por IP às portas do AzuraCast e sites foi bloqueado."
+    log_success "Hardening aplicado: acesso direto externo por IP às portas do AzuraCast foi bloqueado."
     log_info "Tráfego local via localhost/loopback permanece liberado para diagnóstico."
     log_info "Para persistir após reboot: apt-get install -y iptables-persistent && netfilter-persistent save"
     return 0
@@ -654,12 +653,7 @@ apply_azuracast_network_hardening() {
 # ==========================================================
 setup_static_site() {
     log_info "Preparando ambiente WordPress..."
-    
-    if ! check_port_available "$STATIC_SITE_PORT"; then
-        log_error "Porta $STATIC_SITE_PORT já está em uso."
-        return 1
-    fi
-    
+
     mkdir -p "$WEB_ROOT" || { log_error "Falha ao criar diretório"; return 1; }
     
     log_success "Ambiente WordPress preparado."
@@ -674,6 +668,10 @@ create_vhost() {
     
     local domain
     domain="$(prompt_domain)"
+    local domain_slug="${domain//./-}"
+    local wp_container_name="wp-app-${domain_slug}"
+    local wp_db_container_name="wp-db-${domain_slug}"
+    local wp_network_name="wp-${domain_slug}-network"
     
     local domain_path="$WEB_ROOT/$domain"
     log_info "Criando estrutura em $domain_path"
@@ -719,7 +717,7 @@ create_vhost() {
 services:
   wp-db:
     image: mariadb:10.11
-    container_name: wp-db-${domain//./-}
+        container_name: ${wp_db_container_name}
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
@@ -728,15 +726,15 @@ services:
       MYSQL_PASSWORD: ${wp_db_password}
     volumes:
       - ./db_data:/var/lib/mysql
+        networks:
+            - wp_network
 
   wordpress:
     image: wordpress:php8.2-apache
-    container_name: wp-app-${domain//./-}
+        container_name: ${wp_container_name}
     restart: unless-stopped
     depends_on:
       - wp-db
-    ports:
-      - "${STATIC_SITE_PORT}:80"
     environment:
       WORDPRESS_DB_HOST: wp-db:3306
       WORDPRESS_DB_NAME: ${wp_db_name}
@@ -744,6 +742,13 @@ services:
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
       - ./html:/var/www/html
+        networks:
+            - wp_network
+
+networks:
+    wp_network:
+        name: ${wp_network_name}
+        driver: bridge
 EOF
 
     log_info "Iniciando stack WordPress..."
@@ -752,11 +757,35 @@ EOF
         return 1
     fi
 
+    # Conectar NPM na rede do WordPress para proxy interno sem exposição de porta pública.
+    if docker ps --format '{{.Names}}' | grep -qx "nginx-proxy-manager"; then
+        if docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' nginx-proxy-manager 2>/dev/null | grep -qx "$wp_network_name"; then
+            log_success "Nginx Proxy Manager já está conectado à rede do WordPress: $wp_network_name"
+        else
+            if docker network connect "$wp_network_name" nginx-proxy-manager 2>/dev/null; then
+                log_success "Nginx Proxy Manager conectado à rede do WordPress: $wp_network_name"
+            else
+                log_warn "Falha ao conectar Nginx Proxy Manager na rede $wp_network_name"
+            fi
+        fi
+
+        if docker exec nginx-proxy-manager sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://${wp_container_name}:80" 2>/dev/null | grep -Eq '^(200|301|302)$'; then
+            log_success "Conectividade interna NPM -> ${wp_container_name}:80 validada"
+        else
+            log_warn "Não foi possível validar conectividade NPM -> ${wp_container_name}:80"
+        fi
+    else
+        log_warn "Container nginx-proxy-manager não encontrado; conexão de rede do WordPress não aplicada."
+    fi
+
     cat > "$creds_file" <<EOF || { log_error "Falha ao salvar credenciais do WordPress"; return 1; }
 DOMAIN=${domain}
 WORDPRESS_URL=http://${domain}
-WORDPRESS_CONTAINER=wp-app-${domain//./-}
-WORDPRESS_DB_CONTAINER=wp-db-${domain//./-}
+WORDPRESS_CONTAINER=${wp_container_name}
+WORDPRESS_DB_CONTAINER=${wp_db_container_name}
+WORDPRESS_NETWORK=${wp_network_name}
+WORDPRESS_PROXY_HOST=${wp_container_name}
+WORDPRESS_PROXY_PORT=80
 WORDPRESS_DB_NAME=${wp_db_name}
 WORDPRESS_DB_USER=${wp_db_user}
 WORDPRESS_DB_PASSWORD=${wp_db_password}
@@ -786,7 +815,7 @@ display_summary() {
         echo "📝 WordPress: $domain"
         echo "   Diretório: $WEB_ROOT/$domain"
         echo "   Credenciais DB: $WEB_ROOT/$domain/wordpress-credentials.txt"
-        echo "   Teste: curl -H 'Host: $domain' http://127.0.0.1:${STATIC_SITE_PORT}"
+        echo "   Proxy interno: wp-app-${domain//./-}:80 (sem porta pública)"
         echo
     fi
     
@@ -800,7 +829,7 @@ display_summary() {
     echo "   Portas internas: $AZURACAST_HTTP_PORT (HTTP), $AZURACAST_HTTPS_PORT (HTTPS)"
     echo "   Streaming: portas $AZURACAST_STATION_PORT_START-$AZURACAST_STATION_PORT_END"
     if [ "${BLOCK_DIRECT_AZURACAST_ACCESS:-1}" = "1" ]; then
-        echo "   Segurança: acesso direto por IP bloqueado para AzuraCast e sites (usar domínio/proxy)"
+        echo "   Segurança: acesso direto por IP bloqueado para AzuraCast (usar domínio/proxy)"
     fi
     echo
     
@@ -808,7 +837,8 @@ display_summary() {
     echo "1. Acessar painel do Nginx Proxy Manager"
     echo "2. Criar Proxy Hosts para:"
     if [ -n "$domain" ]; then
-        echo "   - $domain → http://$public_ip:$STATIC_SITE_PORT"
+        echo "   - $domain → http://wp-app-${domain//./-}:80"
+        echo "     (No NPM em Docker, não use localhost/IP público para WordPress)"
     fi
     echo "   - azura.seudominio.com → http://azuracast:$AZURACAST_HTTP_PORT"
     echo "     (No NPM em Docker, prefira 'azuracast' em vez de localhost/IP público)"
