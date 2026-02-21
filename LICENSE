@@ -5,6 +5,9 @@ Copyright (c) 2026 Danilo Ramos
 This license applies ONLY to the automation scripts in this repository.
 AzuraCast, Nginx Proxy Manager, Docker, and other third-party software
 installed by these scripts are subject to their own respective licenses.
+See THIRD_PARTY_NOTICES.md for third-party attribution and references.
+
+Names, logos, and trademarks are property of their respective owners.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

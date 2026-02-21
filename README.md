@@ -197,6 +197,17 @@ Flags suportadas (`scripts/uninstall.sh`):
 
 Este repositório usa licença MIT para os scripts de automação.
 
+## Créditos
+
+- Autor e mantenedor: Danilo Ramos
+- Colaboração: contribuidores da comunidade
+
+## Avisos de Terceiros
+
+Referências e créditos de componentes de terceiros em:
+
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
 Softwares de terceiros instalados pelos scripts possuem licenças próprias:
 
 - AzuraCast — Apache 2.0
@@ -326,6 +337,17 @@ Supported flags (`scripts/uninstall.sh`):
 ## License
 
 This repository uses the MIT License for automation scripts.
+
+## Credits
+
+- Author and maintainer: Danilo Ramos
+- Collaboration: community contributors
+
+## Third-Party Notices
+
+Third-party references and attributions:
+
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 Third-party software installed by the scripts has its own licenses:
 
