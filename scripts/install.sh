@@ -15,6 +15,52 @@
 #   https://nginxproxymanager.com
 # - Docker (Apache 2.0)
 #   https://www.docker.com
+#
+# =========================================================
+# CONFIGURAÇÕES OPCIONAIS
+# =========================================================
+#
+# FIREWALL:
+#   export BLOCK_DIRECT_AZURACAST_ACCESS=1
+#     Bloqueia acesso direto às portas do AzuraCast por IP
+#     Força uso de Nginx Proxy Manager (domínio) para acesso
+#     Localhost (127.0.0.1) permanece sempre permitido para diagnóstico
+#     Padrão: 0 (desabilitado - portas abertas)
+#
+#   export FIREWALL_INTERFACE=eth0
+#     Bloqueia portas apenas na interface específica
+#     Se não definido, bloqueia em todas as interfaces (exceto loopback)
+#
+# DESATIVAR HARDENING DE REDE PÓS-INSTALAÇÃO:
+#   export DISABLE_NETWORK_HARDENING=1
+#     Desativa todas as regras de firewall durante instalação
+#
+# =========================================================
+# PÓS-INSTALAÇÃO - GERENCIAR FIREWALL
+# =========================================================
+#
+# Após a instalação, use o script manage_firewall.sh para:
+#
+#   sudo bash manage_firewall.sh
+#     Menu interativo com opções de bloquear/desbloquear/status
+#
+#   sudo bash manage_firewall.sh status
+#     Verifica status atual das portas (bloqueadas ou abertas)
+#
+#   sudo bash manage_firewall.sh block
+#     Bloqueia portas 8080, 8043, 2022, 9000-9999
+#     Recomendado para PRODUÇÃO
+#
+#   sudo bash manage_firewall.sh unblock
+#     Desbloqueia portas (acesso direto por IP)
+#     Recomendado para DESENVOLVIMENTO
+#
+# Variáveis de ambiente (opcional):
+#   export FIREWALL_INTERFACE=eth0
+#     Aplica bloqueio/desbloqueio apenas nesta interface
+#
+# =========================================================
+#
 # =========================================================
 
 set -euo pipefail
@@ -939,7 +985,28 @@ display_summary() {
     echo "3. Gerar certificados SSL com Let's Encrypt"
     echo "4. Ativar 'Force SSL' nos Proxy Hosts"
     echo
-    echo "📋 Logs: $LOG_FILE"
+    echo "� GERENCIAMENTO DE FIREWALL"
+    echo "   As portas estão ABERTAS por padrão (acesso direto por IP permitido)"
+    echo ""
+    echo "   Para PRODUÇÃO, recomenda-se BLOQUEAR o acesso direto:"
+    echo "   $ sudo bash manage_firewall.sh"
+    echo ""
+    echo "   Menu interativo:"
+    echo "     1) Ver status das portas"
+    echo "     2) Bloquear portas (acesso apenas via domínio/proxy)"
+    echo "     3) Desbloquear portas (acesso direto por IP)"
+    echo ""
+    echo "   Ou modo comando:"
+    echo "     $ sudo bash manage_firewall.sh status    # Verificar"
+    echo "     $ sudo bash manage_firewall.sh block      # Bloquear"
+    echo "     $ sudo bash manage_firewall.sh unblock    # Desbloquear"
+    echo ""
+    echo "   Comportamento:"
+    echo "     • Localhost (127.0.0.1) sempre permitido para diagnóstico"
+    echo "     • Quando bloqueado: acesso apenas via domínio (DNS) ou proxy"
+    echo "     • Quando desbloqueado: acesso também via IP:porta"
+    echo
+    echo "�📋 Logs: $LOG_FILE"
     print_separator
 }
 
