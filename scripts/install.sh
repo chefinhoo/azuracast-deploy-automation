@@ -13,12 +13,27 @@
 #   https://www.azuracast.com
 # - Nginx Proxy Manager (MIT)
 #   https://nginxproxymanager.com
+# - Roundcube Webmail (GPL 3.0)
+#   https://roundcube.net
+# - Filebrowser (Apache 2.0)
+#   https://filebrowser.org
 # - Docker (Apache 2.0)
 #   https://www.docker.com
 #
 # =========================================================
 # CONFIGURAÇÕES OPCIONAIS
 # =========================================================
+#
+# SERVIÇOS ADICIONAIS:
+#   export INSTALL_WEBMAIL=1
+#     Instala Roundcube para gerenciar emails
+#     Requer SMTP configurado (veja WEBMAIL_SETUP.md)
+#     Padrão: 1 (habilitado)
+#
+#   export INSTALL_FILEMANAGER=1
+#     Instala Filebrowser para gerenciar arquivos
+#     Acesso unificado a WordPress, AzuraCast e arquivos
+#     Padrão: 1 (habilitado)
 #
 # FIREWALL:
 #   export BLOCK_DIRECT_AZURACAST_ACCESS=1
@@ -717,6 +732,244 @@ setup_static_site() {
 }
 
 # ==========================================================
+# ROUNDCUBE WEBMAIL
+# ==========================================================
+setup_webmail() {
+    local install_webmail
+    install_webmail="${INSTALL_WEBMAIL:-1}"
+    
+    if [ "$install_webmail" != "1" ]; then
+        log_info "Webmail desabilitado (INSTALL_WEBMAIL=0)"
+        return 0
+    fi
+    
+    log_info "Instalando Roundcube Webmail..."
+    
+    local webmail_dir="/var/webmail"
+    mkdir -p "$webmail_dir" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    cd "$webmail_dir" || { log_error "Falha ao acessar diretório"; return 1; }
+    
+    # Banco de dados para Roundcube
+    local webmail_db_pass="roundcube_$(openssl rand -hex 8)"
+    
+    cat > "$webmail_dir/docker-compose.yml" <<'EOL'
+services:
+  webmail-db:
+    image: mariadb:10.11
+    container_name: webmail-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "roundcube_root_change_me"
+      MYSQL_DATABASE: "roundcubemail"
+      MYSQL_USER: "roundcube"
+      MYSQL_PASSWORD: "roundcube_change_me"
+      MYSQL_INITDB_SKIP_TZINFO: "yes"
+    volumes:
+      - webmail_db_data:/var/lib/mysql
+    networks:
+      - webmail_network
+
+  webmail:
+    image: roundcube/roundcubemail:latest-fpm
+    container_name: webmail
+    restart: unless-stopped
+    environment:
+      ROUNDCUBEMAIL_DB_TYPE: "mysql"
+      ROUNDCUBEMAIL_DB_HOST: "webmail-db"
+      ROUNDCUBEMAIL_DB_USER: "roundcube"
+      ROUNDCUBEMAIL_DB_PASSWORD: "roundcube_change_me"
+      ROUNDCUBEMAIL_DB_NAME: "roundcubemail"
+      ROUNDCUBEMAIL_SMTP_SERVER: "localhost"
+      ROUNDCUBEMAIL_SMTP_PORT: "587"
+      ROUNDCUBEMAIL_IMAP_HOST: "localhost"
+      ROUNDCUBEMAIL_IMAP_PORT: "143"
+      ROUNDCUBEMAIL_PLUGINS: "archive,zipdownload"
+    volumes:
+      - webmail_data:/var/www/html
+    depends_on:
+      - webmail-db
+    networks:
+      - webmail_network
+
+  webmail-nginx:
+    image: nginx:latest
+    container_name: webmail-nginx
+    restart: unless-stopped
+    ports:
+      - "9000:80"
+    volumes:
+      - webmail_data:/var/www/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - webmail
+    networks:
+      - webmail_network
+
+volumes:
+  webmail_data:
+  webmail_db_data:
+
+networks:
+  webmail_network:
+    driver: bridge
+EOL
+
+    # Configuração NGINX para Roundcube
+    cat > "$webmail_dir/nginx.conf" <<'NGINX_EOL'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log /var/log/nginx/access.log main;
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    gzip on;
+
+    upstream webmail_backend {
+        server webmail:9000;
+    }
+
+    server {
+        listen 80;
+        server_name _;
+        root /var/www/html;
+
+        index index.php index.html;
+
+        location ~ \.php$ {
+            fastcgi_pass webmail_backend;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+
+        location ~ /\. {
+            deny all;
+        }
+    }
+}
+NGINX_EOL
+
+    log_info "Iniciando containers de Webmail..."
+    if docker compose up -d; then
+        log_success "Roundcube instalado com sucesso"
+        sleep 5
+        echo "webmail" >> /tmp/deployed_services
+    else
+        log_error "Falha ao iniciar Roundcube"
+        return 1
+    fi
+    
+    log_info "Próximos passos para Roundcube:"
+    log_info "  1. Configurar SMTP/IMAP no Nginx Proxy Manager"
+    log_info "  2. Acessar: http://seu-dominio.com/webmail (via proxy)"
+    log_info "  3. Editar /var/webmail/docker-compose.yml com credenciais SMTP/IMAP"
+    log_info "  4. Reiniciar: cd /var/webmail && docker compose restart"
+    
+    return 0
+}
+
+# ==========================================================
+# FILEBROWSER - GERENCIADOR DE ARQUIVOS
+# ==========================================================
+setup_filemanager() {
+    local install_filemanager
+    install_filemanager="${INSTALL_FILEMANAGER:-1}"
+    
+    if [ "$install_filemanager" != "1" ]; then
+        log_info "Gerenciador de arquivos desabilitado (INSTALL_FILEMANAGER=0)"
+        return 0
+    fi
+    
+    log_info "Instalando Filebrowser..."
+    
+    local filemanager_dir="/var/filemanager"
+    mkdir -p "$filemanager_dir/root" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    cd "$filemanager_dir" || { log_error "Falha ao acessar diretório"; return 1; }
+    
+    cat > "$filemanager_dir/docker-compose.yml" <<'EOL'
+services:
+  filemanager:
+    image: filebrowser/filebrowser:latest
+    container_name: filemanager
+    restart: unless-stopped
+    ports:
+      - "9001:80"
+    volumes:
+      - ./root:/srv
+      - ./filebrowser.db:/database.db
+      - ./settings.json:/etc/config/settings.json
+      - /var/www:/var/www:rw
+      - /var/azuracast:/var/azuracast:rw
+    networks:
+      - filemanager_network
+
+volumes:
+  filebrowser_data:
+
+networks:
+  filemanager_network:
+    driver: bridge
+EOL
+
+    # Configuração do Filebrowser
+    cat > "$filemanager_dir/settings.json" <<'JSON_EOL'
+{
+  "auth": {
+    "method": "simple"
+  },
+  "branding": {
+    "name": "Gerenciador de Arquivos"
+  },
+  "commands": {},
+  "editors": {
+    "editormd": {
+      "extensions": ["md", "markdown", "mdown", "mkd", "mkdn"]
+    }
+  },
+  "rules": [],
+  "shell": [],
+  "signup": false,
+  "username": "admin",
+  "password": "password"
+}
+JSON_EOL
+
+    log_info "Iniciando containers de Gerenciador de Arquivos..."
+    if docker compose up -d; then
+        log_success "Filebrowser instalado com sucesso"
+        sleep 3
+        echo "filemanager" >> /tmp/deployed_services
+    else
+        log_error "Falha ao iniciar Filebrowser"
+        return 1
+    fi
+    
+    log_info "Próximos passos para Filebrowser:"
+    log_info "  1. Configurar domínio no Nginx Proxy Manager"
+    log_info "  2. Acessar: http://seu-dominio.com/files"
+    log_info "  3. Login padrão: admin / password"
+    log_info "  4. IMPORTANTE: Alterar senha em Settings"
+    log_info "  5. Configurar permissões de pastas em Settings > Rules"
+    
+    return 0
+}
+
+# ==========================================================
 # CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
@@ -969,6 +1222,20 @@ display_summary() {
     fi
     echo
     
+    echo "📧 Roundcube Webmail"
+    echo "   Tipo: Gerenciador de emails via navegador"
+    echo "   Diretório: /var/webmail"
+    echo "   Status: Instalado (configure SMTP/IMAP)"
+    echo "   Acessar via Nginx Proxy Manager: https://webmail.$domain"
+    echo
+    
+    echo "📁 Filebrowser"
+    echo "   Tipo: Gerenciador unificado de arquivos"
+    echo "   Diretório: /var/filemanager"
+    echo "   Acesso a: WordPress, AzuraCast, arquivos do sistema"
+    echo "   Acessar via Nginx Proxy Manager: https://files.$domain"
+    echo
+    
     echo "----- PRÓXIMOS PASSOS -----"
     echo "1. Acessar painel do Nginx Proxy Manager"
     echo "2. Criar Proxy Hosts para:"
@@ -978,12 +1245,32 @@ display_summary() {
         echo ""
         echo "   - azura.$domain → http://azuracast:$AZURACAST_HTTP_PORT"
         echo "     (Use 'azuracast', não localhost/IP)"
+        echo ""
+        echo "   - webmail.$domain → http://webmail-nginx:80"
+        echo "     (Para Roundcube)"
+        echo ""
+        echo "   - files.$domain → http://filemanager:80"
+        echo "     (Para Filebrowser)"
     else
         echo "   - seudominio.com → http://azuracast:$AZURACAST_HTTP_PORT"
         echo "     (Use 'azuracast', não localhost/IP)"
+        echo "   - webmail.seudominio.com → http://webmail-nginx:80"
+        echo "   - files.seudominio.com → http://filemanager:80"
     fi
     echo "3. Gerar certificados SSL com Let's Encrypt"
     echo "4. Ativar 'Force SSL' nos Proxy Hosts"
+    echo ""
+    echo "5. IMPORTANTE - Configurar Roundcube:"
+    echo "   - Editar: /var/webmail/docker-compose.yml"
+    echo "   - Definir SMTP_SERVER e IMAP_HOST"
+    echo "   - Reiniciar: cd /var/webmail && docker compose restart"
+    echo "   - Ver: WEBMAIL_SETUP.md"
+    echo ""
+    echo "6. IMPORTANTE - Configurar Filebrowser:"
+    echo "   - Acessar: https://files.$domain"
+    echo "   - Login padrão: admin / password"
+    echo "   - Alterar senha em Settings"
+    echo "   - Ver: FILEMANAGER_SETUP.md"
     echo
     echo "� GERENCIAMENTO DE FIREWALL"
     echo "   As portas estão ABERTAS por padrão (acesso direto por IP permitido)"
@@ -1045,6 +1332,8 @@ main() {
     connect_npm_to_azuracast_network || log_warn "Não foi possível conectar NPM à rede do AzuraCast"
     apply_azuracast_network_hardening || log_warn "Hardening de rede não foi aplicado"
     setup_static_site || { log_error "Setup WordPress falhou"; exit 1; }
+    setup_webmail || log_warn "Setup de Webmail falhou ou foi desabilitado"
+    setup_filemanager || log_warn "Setup de Gerenciador de Arquivos falhou ou foi desabilitado"
     
     # Criar vhost (opcional)
     if [ "${PROMPT_FOR_DOMAIN:-1}" = "1" ]; then
