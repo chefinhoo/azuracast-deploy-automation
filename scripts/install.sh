@@ -651,15 +651,10 @@ apply_azuracast_network_hardening() {
         add_drop_rule_v6 "INPUT" "$port_spec"
     }
 
-    log_info "Aplicando hardening de rede para acesso somente via proxy/domínio..."
-    add_drop_rule "$AZURACAST_HTTP_PORT"
-    add_drop_rule "$AZURACAST_HTTPS_PORT"
-    add_drop_rule "2022"
-    add_drop_rule "9000:9999"
-
-    log_success "Hardening aplicado: acesso direto externo por IP às portas do AzuraCast foi bloqueado."
-    log_info "Tráfego local via localhost/loopback permanece liberado para diagnóstico."
-    log_info "Para persistir após reboot: apt-get install -y iptables-persistent && netfilter-persistent save"
+    log_info "Hardening de rede desativado por padrão - portas abertas para acesso direto."
+    log_info "Para bloquear acesso direto (recomendado em produção), defina:"
+    log_info "  export BLOCK_DIRECT_AZURACAST_ACCESS=1"
+    log_info "  sudo bash scripts/install.sh"
     return 0
 }
 
