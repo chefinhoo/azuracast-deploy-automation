@@ -29,7 +29,7 @@ sudo bash scripts/install_mailserver.sh
 ```
 
 O script vai solicitar:
-- Seu domínio principal (ex: `daniloramos.dev.br`)
+- Seu domínio principal (ex: `exemplo.com.br`)
 - Confirmação de  que o DNS está configurado
 
 ---
@@ -40,29 +40,29 @@ O script vai solicitar:
 
 ```dns
 # Registro A - Aponta mail.seudominio.com para seu IP
-mail.daniloramos.dev.br    A      SEU_IP_PUBLICO
+mail.exemplo.com.br    A      SEU_IP_PUBLICO
 
 # Registro MX - Define servidor de e-mail
-daniloramos.dev.br         MX 10  mail.daniloramos.dev.br
+exemplo.com.br         MX 10  mail.exemplo.com.br
 
 # Registro TXT (SPF) - Verifica remetente
-daniloramos.dev.br         TXT    "v=spf1 mx ~all"
+exemplo.com.br         TXT    "v=spf1 mx ~all"
 
 # PTR (Reverse DNS) - Configurar no painel do provedor
-SEU_IP_PUBLICO  →  mail.daniloramos.dev.br
+SEU_IP_PUBLICO  →  mail.exemplo.com.br
 ```
 
 ### Verificar DNS
 
 ```bash
 # Verificar registro A
-dig mail.daniloramos.dev.br +short
+dig mail.exemplo.com.br +short
 
 # Verificar registro MX
-dig daniloramos.dev.br MX +short
+dig exemplo.com.br MX +short
 
 # Verificar SPF
-dig daniloramos.dev.br TXT +short
+dig exemplo.com.br TXT +short
 ```
 
 ---
@@ -74,7 +74,7 @@ dig daniloramos.dev.br TXT +short
 Acesse `http://SEU_IP:81` e crie Proxy Host:
 
 **PostfixAdmin:**
-- Domain Names: `mailadmin.daniloramos.dev.br`
+- Domain Names: `mailadmin.exemplo.com.br`
 - Scheme: `http`
 - Forward Hostname/IP: `postfixadmin`
 - Forward Port: `80`
@@ -85,7 +85,7 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
 
 **Primeira vez:**
 
-1. Acesse: `https://mailadmin.daniloramos.dev.br/setup.php`
+1. Acesse: `https://mailadmin.exemplo.com.br/setup.php`
 2. Cole a **Setup Password** (no arquivo`/var/mailserver/credentials.txt`)
 3. Clique em **Generate password hash**
 4. Abra `/var/mailserver/postfixadmin/config.local.php` e adicione:
@@ -94,7 +94,7 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
    ```
 5. Volte ao setup e crie o **primeiro admin**:
    - Setup password: (a mesma)
-   - Admin: `admin@daniloramos.dev.br`
+   - Admin: `admin@exemplo.com.br`
    - Password: (escolha uma senha forte)
    - Repeat Password: (repita)
 
@@ -102,10 +102,10 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
 
 ### 3. Configurar Domínio
 
-1. Login em `https://mailadmin.daniloramos.dev.br`
+1. Login em `https://mailadmin.exemplo.com.br`
 2. Vá em **Domain List** → **New Domain**
 3. Preencha:
-   - Domain: `daniloramos.dev.br`
+   - Domain: `exemplo.com.br`
    - Description: `Domínio principal`
    - Aliases: `50`
    - Mailboxes: `50`
@@ -116,7 +116,7 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
 
 1. Vá em **Virtual List** → **Add Mailbox**
 2. Preencha:
-   - Username: `contato@daniloramos.dev.br`
+   - Username: `contato@exemplo.com.br`
    - Password: (senha forte)
    - Name: `Contato`
    - Quota: `1024` MB (1GB)
@@ -129,10 +129,10 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
 
 ### Roundcube (Webmail)
 
-**URL:** `https://webmail.daniloramos.dev.br`
+**URL:** `https://webmail.exemplo.com.br`
 
 **Login:**
-- Usuário: `contato@daniloramos.dev.br`
+- Usuário: `contato@exemplo.com.br`
 - Senha: (senha definida no PostfixAdmin)
 
 ### Clientes de E-mail (Outlook, Thunderbird, etc)
@@ -140,18 +140,18 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
 **Configurações:**
 
 **IMAP (Receber):**
-- Servidor: `mail.daniloramos.dev.br`
+- Servidor: `mail.exemplo.com.br`
 - Porta: `993`
 - Segurança: `SSL/TLS`
-- Usuário: `contato@daniloramos.dev.br`
+- Usuário: `contato@exemplo.com.br`
 - Senha: (sua senha)
 
 **SMTP (Enviar):**
-- Servidor: `mail.daniloramos.dev.br`
+- Servidor: `mail.exemplo.com.br`
 - Porta: `587`
 - Segurança: `STARTTLS`
 - Autenticação: ✓ Sim
-- Usuário: `contato@daniloramos.dev.br`
+- Usuário: `contato@exemplo.com.br`
 - Senha: (sua senha)
 
 ---
@@ -166,29 +166,29 @@ cd /var/mailserver
 docker compose exec mailserver setup config dkim
 
 # Ver chave pública
-cat /var/mailserver/config/opendkim/keys/daniloramos.dev.br/mail.txt
+cat /var/mailserver/config/opendkim/keys/exemplo.com.br/mail.txt
 ```
 
 Adicione no DNS:
 ```dns
-mail._domainkey.daniloramos.dev.br  TXT  "v=DKIM1; k=rsa; p=CHAVE_PUBLICA_AQUI"
+mail._domainkey.exemplo.com.br  TXT  "v=DKIM1; k=rsa; p=CHAVE_PUBLICA_AQUI"
 ```
 
 ### DMARC (Política de E-mail)
 
 ```dns
-_dmarc.daniloramos.dev.br  TXT  "v=DMARC1; p=quarantine; rua=mailto:postmaster@daniloramos.dev.br"
+_dmarc.exemplo.com.br  TXT  "v=DMARC1; p=quarantine; rua=mailto:postmaster@exemplo.com.br"
 ```
 
 ### SSL/TLS (Certificados)
 
 ```bash
 # Gerar certificado com Let's Encrypt
-sudo certbot certonly --standalone -d mail.daniloramos.dev.br
+sudo certbot certonly --standalone -d mail.exemplo.com.br
 
 # Copiar para o container
-sudo cp /etc/letsencrypt/live/mail.daniloramos.dev.br/fullchain.pem /var/mailserver/config/ssl/cert.pem
-sudo cp /etc/letsencrypt/live/mail.daniloramos.dev.br/privkey.pem /var/mailserver/config/ssl/key.pem
+sudo cp /etc/letsencrypt/live/mail.exemplo.com.br/fullchain.pem /var/mailserver/config/ssl/cert.pem
+sudo cp /etc/letsencrypt/live/mail.exemplo.com.br/privkey.pem /var/mailserver/config/ssl/key.pem
 
 # Reiniciar mailserver
 cd /var/mailserver && docker compose restart mailserver
@@ -274,7 +274,7 @@ SELECT username, name, active FROM mailbox;
 
 ```bash
 # Testar conectividade SMTP
-telnet mail.daniloramos.dev.br 25
+telnet mail.exemplo.com.br 25
 ```
 
 ### E-mail cai no spam

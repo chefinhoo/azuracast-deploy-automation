@@ -13,7 +13,7 @@ cd azuracast-deploy-automation
 
 # Configure as variáveis
 export INSTALL_MAILSERVER=1
-export MAIL_DOMAIN="daniloramos.dev.br"
+export MAIL_DOMAIN="exemplo.com.br"
 export INSTALL_WEBMAIL=1
 export INSTALL_FILEMANAGER=1
 
@@ -45,7 +45,7 @@ nano .deploy-config
 ```bash
 # Servidor de E-mail
 INSTALL_MAILSERVER=1
-MAIL_DOMAIN="daniloramos.dev.br"
+MAIL_DOMAIN="exemplo.com.br"
 
 # Outros serviços
 INSTALL_WEBMAIL=1

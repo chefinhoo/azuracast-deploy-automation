@@ -5,12 +5,12 @@
 Se você configurou os Proxy Hosts no Nginx Proxy Manager mas os sites não estão acessíveis, siga este guia.
 
 ### ✅ Site Funcionando
-- ✓ https://daniloramos.dev.br/ → http://azuracast:8080
+- ✓ https://exemplo.com.br/ → http://azuracast:8080
 
 ### ❌ Sites NÃO Funcionando
-- ✗ https://files.daniloramos.dev.br/ → http://filemanager:80
-- ✗ https://webmail.daniloramos.dev.br/ → http://webmail-nginx:80
-- ✗ https://gospelibipitanga.com.br/ → http://wp-app-gospelibipitanga-com-br:80
+- ✗ https://files.exemplo.com.br/ → http://filemanager:80
+- ✗ https://webmail.exemplo.com.br/ → http://webmail-nginx:80
+- ✗ https://site1.com.br/ → http://wp-app-site1-com-br:80
 
 ---
 
@@ -43,7 +43,7 @@ Os problemas mais comuns são:
 ```bash
 cd /var/filemanager && docker compose up -d
 cd /var/webmail && docker compose up -d
-cd /var/www/gospelibipitanga.com.br && docker compose up -d
+cd /var/www/site1.com.br && docker compose up -d
 ```
 
 #### B) Containers não estão na mesma rede 🌐
@@ -57,7 +57,7 @@ PROXY_NETWORK=$(docker inspect -f '{{range $key, $value := .NetworkSettings.Netw
 # Conectar containers à rede
 docker network connect $PROXY_NETWORK filemanager
 docker network connect $PROXY_NETWORK webmail-nginx
-docker network connect $PROXY_NETWORK wp-app-gospelibipitanga-com-br
+docker network connect $PROXY_NETWORK wp-app-exemplo-com-br
 ```
 
 #### C) Configuração incorreta no NPM ⚙️
@@ -70,7 +70,7 @@ docker network connect $PROXY_NETWORK wp-app-gospelibipitanga-com-br
 3. Vá em **Hosts → Proxy Hosts**
 4. Para cada host que não funciona, clique em **⋮** → **Edit**
 5. Verifique na aba **Details**:
-   - **Domain Names**: correto (ex: `files.daniloramos.dev.br`)
+   - **Domain Names**: correto (ex: `files.exemplo.com.br`)
    - **Scheme**: `http`
    - **Forward Hostname / IP**: **nome do container** (ex: `filemanager`)
    - **Forward Port**: porta correta (normalmente `80`)
@@ -148,7 +148,7 @@ docker inspect <ID_DO_PROXY> -f '{{range $key := .NetworkSettings.Networks}}{{$k
 docker network connect <NOME_DA_REDE> filemanager
 docker network connect <NOME_DA_REDE> webmail-nginx
 docker network connect <NOME_DA_REDE> webmail-db
-docker network connect <NOME_DA_REDE> wp-app-gospelibipitanga-com-br
+docker network connect <NOME_DA_REDE> wp-app-exemplo-com-br
 
 # 4. Verificar se funcionou
 docker ps --format "table {{.Names}}\t{{.Networks}}"
@@ -159,7 +159,7 @@ docker ps --format "table {{.Names}}\t{{.Networks}}"
 # Se a rede for "proxy_manager_npm_network":
 docker network connect proxy_manager_npm_network filemanager
 docker network connect proxy_manager_npm_network webmail-nginx
-docker network connect proxy_manager_npm_network wp-app-gospelibipitanga-com-br
+docker network connect proxy_manager_npm_network wp-app-exemplo-com-br
 ```
 
 ---
@@ -182,7 +182,7 @@ docker logs webmail-nginx --tail 50
 docker logs roundcube --tail 50
 
 # WordPress
-docker logs wp-app-gospelibipitanga-com-br --tail 50
+docker logs wp-app-exemplo-com-br --tail 50
 ```
 
 ### 3. Testar conectividade interna
@@ -192,15 +192,15 @@ PROXY_ID=$(docker ps -qf "name=proxy" | head -1)
 
 docker exec $PROXY_ID wget -O- http://filemanager:80
 docker exec $PROXY_ID wget -O- http://webmail-nginx:80
-docker exec $PROXY_ID wget -O- http://wp-app-gospelibipitanga-com-br:80
+docker exec $PROXY_ID wget -O- http://wp-app-exemplo-com-br:80
 ```
 
 ### 4. Verificar DNS (se usar domínio personalizado)
 ```bash
 # Verificar se o domínio aponta para o IP do servidor
-dig +short files.daniloramos.dev.br
-dig +short webmail.daniloramos.dev.br
-dig +short gospelibipitanga.com.br
+dig +short files.exemplo.com.br
+dig +short webmail.exemplo.com.br
+dig +short site1.com.br
 ```
 **Esperado**: Deve retornar o IP público do servidor
 
@@ -220,10 +220,10 @@ sudo ufw allow 443/tcp
 
 | Serviço | Container | Porta Interna | Hostname para NPM | URL Externa |
 |---------|-----------|---------------|-------------------|-------------|
-| AzuraCast | `azuracast` | 8080 | `azuracast:8080` | daniloramos.dev.br |
-| Filemanager | `filemanager` | 80 | `filemanager:80` | files.daniloramos.dev.br |
-| Webmail | `webmail-nginx` | 80 | `webmail-nginx:80` | webmail.daniloramos.dev.br |
-| WordPress | `wp-app-gospelibipitanga-com-br` | 80 | `wp-app-gospelibipitanga-com-br:80` | gospelibipitanga.com.br |
+| AzuraCast | `azuracast` | 8080 | `azuracast:8080` | exemplo.com.br |
+| Filemanager | `filemanager` | 80 | `filemanager:80` | files.exemplo.com.br |
+| Webmail | `webmail-nginx` | 80 | `webmail-nginx:80` | webmail.exemplo.com.br |
+| WordPress | `wp-app-site1-com-br` | 80 | `wp-app-site1-com-br:80` | site1.com.br |
 
 ---
 
@@ -243,7 +243,7 @@ docker compose down -v
 docker compose up -d
 
 # WordPress
-cd /var/www/gospelibipitanga.com.br
+cd /var/www/exemplo.com.br
 docker compose down -v
 docker compose up -d
 
@@ -254,7 +254,7 @@ sleep 120
 PROXY_NETWORK=$(docker inspect -f '{{range $key, $value := .NetworkSettings.Networks}}{{$key}}{{end}}' $(docker ps -qf 'name=proxy') | head -1)
 docker network connect $PROXY_NETWORK filemanager
 docker network connect $PROXY_NETWORK webmail-nginx
-docker network connect $PROXY_NETWORK wp-app-gospelibipitanga-com-br
+docker network connect $PROXY_NETWORK wp-app-exemplo-com-br
 ```
 
 ---

@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 echo "1️⃣  Verificando status dos containers..."
 echo "──────────────────────────────────────────────────────"
 
-CONTAINERS=("azuracast" "filemanager" "webmail-nginx" "roundcube" "wp-app-gospelibipitanga-com-br")
+CONTAINERS=("azuracast" "filemanager" "webmail-nginx" "roundcube" "wp-app-exemplo-com-br")
 
 for container in "${CONTAINERS[@]}"; do
     if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
@@ -73,7 +73,7 @@ test_endpoints() {
 test_endpoints "AzuraCast" "http://azuracast:8080"
 test_endpoints "Filemanager" "http://filemanager:80"
 test_endpoints "Webmail" "http://webmail-nginx:80"
-test_endpoints "WordPress Gospel" "http://wp-app-gospelibipitanga-com-br:80"
+test_endpoints "WordPress Gospel" "http://wp-app-exemplo-com-br:80"
 
 echo ""
 
@@ -130,8 +130,8 @@ if [ ! -z "$stopped_containers" ]; then
     fi
     
     if echo "$stopped_containers" | grep -q "wp-app"; then
-        echo "# WordPress (gospelibipitanga.com.br):"
-        echo "cd /var/www/gospelibipitanga.com.br && docker compose up -d"
+        echo "# WordPress (exemplo.com.br):"
+        echo "cd /var/www/exemplo.com.br && docker compose up -d"
         echo ""
     fi
 fi
@@ -147,14 +147,14 @@ echo "# Conectar containers à rede do proxy (exemplo):"
 echo "PROXY_NETWORK=\$(docker inspect -f '{{range \$key, \$value := .NetworkSettings.Networks}}{{\$key}}{{end}}' \$(docker ps -qf 'name=proxy-manager') | head -1)"
 echo "docker network connect \$PROXY_NETWORK filemanager"
 echo "docker network connect \$PROXY_NETWORK webmail-nginx"
-echo "docker network connect \$PROXY_NETWORK wp-app-gospelibipitanga-com-br"
+echo "docker network connect \$PROXY_NETWORK wp-app-exemplo-com-br"
 echo ""
 
 echo "🔨 SOLUÇÃO 3: Reiniciar todos os serviços"
 echo "──────────────────────────────────────────────────────"
 echo "cd /var/filemanager && docker compose restart"
 echo "cd /var/webmail && docker compose restart"
-echo "cd /var/www/gospelibipitanga.com.br && docker compose restart"
+echo "cd /var/www/exemplo.com.br && docker compose restart"
 echo ""
 
 echo "🔨 SOLUÇÃO 4: Verificar configuração do proxy no NPM"
@@ -177,7 +177,7 @@ echo "# Webmail:"
 echo "cd /var/webmail && docker compose down && docker compose up -d"
 echo ""
 echo "# WordPress:"
-echo "cd /var/www/gospelibipitanga.com.br && docker compose down && docker compose up -d"
+echo "cd /var/www/exemplo.com.br && docker compose down && docker compose up -d"
 echo ""
 
 echo "═══════════════════════════════════════════════════════"

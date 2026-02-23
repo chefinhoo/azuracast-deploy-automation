@@ -365,7 +365,7 @@ docker exec filemanager filebrowser users update usuario_cliente \
 ```
 
 **Exemplos de Scope:**
-- `/var/www/gospelibipitanga.com.br` - Acesso apenas a um site
+- `/var/www/exemplo.com.br` - Acesso apenas a um site
 - `/var/www` - Acesso a todos os sites WordPress
 - `/var/azuracast` - Acesso aos arquivos do AzuraCast
 

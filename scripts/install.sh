@@ -999,7 +999,7 @@ setup_mailserver() {
     if [ -z "$mail_domain" ]; then
         echo ""
         log_info "Configure o servidor de e-mail completo com PostfixAdmin"
-        read -p "Digite o domínio principal para e-mail (ex: daniloramos.dev.br): " mail_domain
+        read -p "Digite o domínio principal para e-mail (ex: exemplo.com.br): " mail_domain
         
         if [ -z "$mail_domain" ]; then
             log_warn "Domínio não fornecido, pulando instalação do servidor de e-mail"

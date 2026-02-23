@@ -136,13 +136,13 @@ docker exec filemanager filebrowser users add cliente2 \
 ### Exemplo 1: Cliente com WordPress
 
 ```bash
-# Site: gospelibipitanga.com.br
-# Usuário: admin_gospel
+# Site: exemplo.com.br
+# Usuário: admin_exemplo
 # Acesso: Apenas aos arquivos do WordPress
 
-docker exec filemanager filebrowser users add admin_gospel \
-  --password="Gospel@2026!" \
-  --scope="/var/www/gospelibipitanga.com.br" \
+docker exec filemanager filebrowser users add admin_exemplo \
+  --password="Exemplo@2026!" \
+  --scope="/var/www/exemplo.com.br" \
   --perm.download \
   --perm.upload \
   --perm.create \
@@ -185,7 +185,7 @@ docker exec filemanager filebrowser users add dev_master \
 / (raiz aparente)
 ├── site1.com.br/
 ├── site2.com.br/
-├── gospelibipitanga.com.br/
+├── exemplo.com.br/
 └── outrosite.com.br/
 ```
 
@@ -249,7 +249,7 @@ docker exec filemanager filebrowser users ls
 | ID | Username      | Admin  | Scope                         |
 +----+---------------+--------+-------------------------------+
 | 1  | admin         | true   | /srv                          |
-| 2  | admin_gospel  | false  | /var/www/gospelibipitanga.com.br |
+| 2  | admin_exemplo  | false  | /var/www/exemplo.com.br |
 | 3  | cliente1      | false  | /var/www/site1.com.br        |
 +----+---------------+--------+-------------------------------+
 ```
@@ -258,15 +258,15 @@ docker exec filemanager filebrowser users ls
 
 ```bash
 # Alterar senha
-docker exec filemanager filebrowser users update admin_gospel \
+docker exec filemanager filebrowser users update admin_exemplo \
   --password="NovaSenha@2026!"
 
 # Alterar scope (pasta raiz)
-docker exec filemanager filebrowser users update admin_gospel \
+docker exec filemanager filebrowser users update admin_exemplo \
   --scope="/var/www/outro-site.com.br"
 
 # Adicionar permissões
-docker exec filemanager filebrowser users update admin_gospel \
+docker exec filemanager filebrowser users update admin_exemplo \
   --perm.download \
   --perm.upload \
   --perm.create \
@@ -276,7 +276,7 @@ docker exec filemanager filebrowser users update admin_gospel \
   --perm.share
 
 # Remover permissões (adicione "no-" antes)
-docker exec filemanager filebrowser users update admin_gospel \
+docker exec filemanager filebrowser users update admin_exemplo \
   --no-perm.delete \
   --no-perm.share
 ```
@@ -284,14 +284,14 @@ docker exec filemanager filebrowser users update admin_gospel \
 ### Remover Usuário
 
 ```bash
-docker exec filemanager filebrowser users rm admin_gospel
+docker exec filemanager filebrowser users rm admin_exemplo
 ```
 
 ### Verificar Configuração de um Usuário
 
 ```bash
 # Listar e filtrar com grep
-docker exec filemanager filebrowser users ls | grep admin_gospel
+docker exec filemanager filebrowser users ls | grep admin_exemplo
 ```
 
 ---
@@ -305,17 +305,17 @@ docker exec filemanager filebrowser users ls | grep admin_gospel
 **Solução:**
 ```bash
 # 1. Verificar se a pasta existe
-ls -la /var/www/gospelibipitanga.com.br
+ls -la /var/www/exemplo.com.br
 
 # 2. Se não existir, criar
-mkdir -p /var/www/gospelibipitanga.com.br/html
+mkdir -p /var/www/exemplo.com.br/html
 
 # 3. Ajustar permissões
-chown -R www-data:www-data /var/www/gospelibipitanga.com.br
+chown -R www-data:www-data /var/www/exemplo.com.br
 
 # 4. Atualizar scope do usuário
-docker exec filemanager filebrowser users update admin_gospel \
-  --scope="/var/www/gospelibipitanga.com.br"
+docker exec filemanager filebrowser users update admin_exemplo \
+  --scope="/var/www/exemplo.com.br"
 ```
 
 ### Problema: "Permission denied" ao tentar criar/editar arquivos
@@ -325,11 +325,11 @@ docker exec filemanager filebrowser users update admin_gospel \
 **Solução:**
 ```bash
 # Ajustar owner dos arquivos no host
-chown -R www-data:www-data /var/www/gospelibipitanga.com.br
+chown -R www-data:www-data /var/www/exemplo.com.br
 
 # Ajustar permissões
-chmod -R 755 /var/www/gospelibipitanga.com.br
-chmod -R 775 /var/www/gospelibipitanga.com.br/html/wp-content/uploads
+chmod -R 755 /var/www/exemplo.com.br
+chmod -R 775 /var/www/exemplo.com.br/html/wp-content/uploads
 ```
 
 ### Problema: Usuário pode ver outros sites
@@ -339,8 +339,8 @@ chmod -R 775 /var/www/gospelibipitanga.com.br/html/wp-content/uploads
 **Solução:**
 ```bash
 # Restringir ao diretório específico
-docker exec filemanager filebrowser users update admin_gospel \
-  --scope="/var/www/gospelibipitanga.com.br"
+docker exec filemanager filebrowser users update admin_exemplo \
+  --scope="/var/www/exemplo.com.br"
 ```
 
 ### Problema: Não consigo fazer login
@@ -350,7 +350,7 @@ docker exec filemanager filebrowser users update admin_gospel \
 **Solução:**
 ```bash
 # Resetar senha
-docker exec filemanager filebrowser users update admin_gospel \
+docker exec filemanager filebrowser users update admin_exemplo \
   --password="NovaSenha@2026!"
 ```
 
@@ -362,9 +362,9 @@ docker exec filemanager filebrowser users update admin_gospel \
 docker exec filemanager filebrowser users ls
 
 # Se não existir, criar
-docker exec filemanager filebrowser users add admin_gospel \
+docker exec filemanager filebrowser users add admin_exemplo \
   --password="Senha@2026!" \
-  --scope="/var/www/gospelibipitanga.com.br" \
+  --scope="/var/www/exemplo.com.br" \
   --perm.download \
   --perm.upload \
   --perm.create \
@@ -380,7 +380,7 @@ docker exec filemanager filebrowser users add admin_gospel \
 ### 1. Segurança de Senhas
 ```bash
 # ✅ Bom: Senha forte
---password="Gospel@2026!XyZ"
+--password="Exemplo@2026!XyZ"
 
 # ❌ Ruim: Senha fraca
 --password="123456"
@@ -400,7 +400,7 @@ docker exec filemanager filebrowser users add admin_gospel \
 ### 3. Nomenclatura de Usuários
 ```bash
 # ✅ Bom: Identificáveis
-admin_gospelibipitanga
+admin_exemploibipitanga
 dev_maria_site1
 cliente_joao_site2
 
@@ -414,9 +414,9 @@ teste
 ```bash
 # Criar arquivo de registro
 cat > /root/usuarios_filebrowser.txt << 'EOF'
-Usuário: admin_gospelibipitanga
-Senha: Gospel@2026!
-Scope: /var/www/gospelibipitanga.com.br
+Usuário: admin_exemploibipitanga
+Senha: Exemplo@2026!
+Scope: /var/www/exemplo.com.br
 Criado: 2026-01-04
 Finalidade: Administração do site igreja
 
@@ -443,7 +443,7 @@ Crie o arquivo `/root/criar_usuarios_filebrowser.sh`:
 # Criar usuários para múltiplos sites WordPress
 
 usuarios=(
-  "admin_gospelibipitanga:Gospel@2026!:/var/www/gospelibipitanga.com.br"
+  "admin_exemploibipitanga:Exemplo@2026!:/var/www/exemplo.com.br"
   "admin_site2:Site2@2026!:/var/www/site2.com.br"
   "admin_site3:Site3@2026!:/var/www/site3.com.br"
 )
@@ -489,7 +489,7 @@ Cada usuário pode ter uma pasta raiz diferente (sandbox):
 1. Settings → Users → Selecionar usuário
 2. Alterar "Scope" (pasta visível)
 3. Exemplos:
-   - `/var/www/gospelibipitanga.com.br` - Apenas um site
+   - `/var/www/exemplo.com.br` - Apenas um site
    - `/var/www` - Todos os WordPress
    - `/var/azuracast` - Apenas AzuraCast
    - `/` - Sistema inteiro (com cautela)
@@ -811,7 +811,7 @@ chmod -R 755 /var/www/DOMINIO.com.br
 
 | Scope | Descrição | Uso |
 |-------|-----------|-----|
-| `/var/www/gospelibipitanga.com.br` | Um site específico | Cliente individual |
+| `/var/www/exemplo.com.br` | Um site específico | Cliente individual |
 | `/var/www` | Todos os sites WordPress | Desenvolvedor/Admin |
 | `/var/azuracast` | Arquivos do AzuraCast | Gerente de rádio |
 | `/var/filemanager/data` | Dados do Filebrowser | Backup/Manutenção |
@@ -821,12 +821,12 @@ chmod -R 755 /var/www/DOMINIO.com.br
 
 ```bash
 # 1. Verificar se a pasta do site existe
-ls -la /var/www/gospelibipitanga.com.br
+ls -la /var/www/exemplo.com.br
 
 # 2. Criar usuário
-docker exec filemanager filebrowser users add admin_gospel \
-  --password="Gospel@2026!" \
-  --scope="/var/www/gospelibipitanga.com.br" \
+docker exec filemanager filebrowser users add admin_exemplo \
+  --password="Exemplo@2026!" \
+  --scope="/var/www/exemplo.com.br" \
   --perm.download \
   --perm.upload \
   --perm.create \
@@ -835,13 +835,13 @@ docker exec filemanager filebrowser users add admin_gospel \
   --perm.delete
 
 # 3. Verificar criação
-docker exec filemanager filebrowser users ls | grep admin_gospel
+docker exec filemanager filebrowser users ls | grep admin_exemplo
 
 # 4. Informar cliente
 echo "Acesso ao Filebrowser:"
 echo "URL: https://files.seudominio.com.br"
-echo "Usuário: admin_gospel"
-echo "Senha: Gospel@2026!"
+echo "Usuário: admin_exemplo"
+echo "Senha: Exemplo@2026!"
 ```
 
 ---

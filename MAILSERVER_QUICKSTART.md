@@ -9,16 +9,16 @@ No painel do seu registrador de domínio (GoDaddy, Namecheap, etc):
 ```dns
 Tipo    Nome                            Valor                   TTL
 ────────────────────────────────────────────────────────────────
-A       mail.daniloramos.dev.br         SEU_IP_PUBLICO         3600
-MX      daniloramos.dev.br              mail.daniloramos.dev.br  10
-TXT     daniloramos.dev.br              v=spf1 mx ~all         3600
+A       mail.exemplo.com.br         SEU_IP_PUBLICO         3600
+MX      exemplo.com.br              mail.exemplo.com.br  10
+TXT     exemplo.com.br              v=spf1 mx ~all         3600
 ```
 
 **Aguarde 5-15 minutos** para propagar.
 
 Verificar:
 ```bash
-dig mail.daniloramos.dev.br +short
+dig mail.exemplo.com.br +short
 # Deve retornar seu IP
 ```
 
@@ -31,7 +31,7 @@ cd /tmp/azuracast-deploy-automation
 sudo bash scripts/install_mailserver.sh
 ```
 
-Digite seu domínio quando solicitado: `daniloramos.dev.br`
+Digite seu domínio quando solicitado: `exemplo.com.br`
 
 **Tempo:** ~5-10 minutos
 
@@ -44,7 +44,7 @@ Acesse Nginx Proxy Manager: `http://SEU_IP:81`
 **Criar Proxy Host para PostfixAdmin:**
 
 ```
-Domain Names:     mailadmin.daniloramos.dev.br
+Domain Names:     mailadmin.exemplo.com.br
 Scheme:           http
 Forward Host/IP:  postfixadmin
 Forward Port:     80
@@ -62,7 +62,7 @@ Force SSL:        ✓
 
 ### 4. Setup Inicial do PostfixAdmin
 
-1. Acesse: `https://mailadmin.daniloramos.dev.br/setup.php`
+1. Acesse: `https://mailadmin.exemplo.com.br/setup.php`
 
 2. Abra o arquivo de credenciais:
    ```bash
@@ -90,7 +90,7 @@ Force SSL:        ✓
 
 7. Crie o primeiro admin:
    - Setup password: (a mesma)
-   - Admin: `admin@daniloramos.dev.br`
+   - Admin: `admin@exemplo.com.br`
    - Password: (escolha forte)
    - Clique em **Add Admin**
 
@@ -98,11 +98,11 @@ Force SSL:        ✓
 
 ### 5. Criar Primeiro Domínio
 
-1. Login: `https://mailadmin.daniloramos.dev.br`
+1. Login: `https://mailadmin.exemplo.com.br`
 2. Menu **Domain List** → **New Domain**
 3. Preencha:
    ```
-   Domain:       daniloramos.dev.br
+   Domain:       exemplo.com.br
    Description:  Domínio Principal
    Aliases:      50
    Mailboxes:    50
@@ -118,7 +118,7 @@ Force SSL:        ✓
 1. Menu **Virtual List** → **Add Mailbox**
 2. Preencha:
    ```
-   Username:   contato@daniloramos.dev.br
+   Username:   contato@exemplo.com.br
    Password:   (senha forte)
    Name:       Contato
    Quota:      1024 MB
@@ -130,9 +130,9 @@ Force SSL:        ✓
 
 ### 7. Testar no Webmail
 
-1. Acesse: `https://webmail.daniloramos.dev.br`
+1. Acesse: `https://webmail.exemplo.com.br`
 2. Login:
-   - Usuário: `contato@daniloramos.dev.br`
+   - Usuário: `contato@exemplo.com.br`
    - Senha: (a que você definiu)
 3. **Pronto!** Envie um e-mail de teste
 
@@ -157,20 +157,20 @@ Force SSL:        ✓
 
 **IMAP (Receber):**
 ```
-Servidor:   mail.daniloramos.dev.br
+Servidor:   mail.exemplo.com.br
 Porta:      993
 Segurança:  SSL/TLS
-Usuário:    contato@daniloramos.dev.br
+Usuário:    contato@exemplo.com.br
 Senha:      (sua senha)
 ```
 
 **SMTP (Enviar):**
 ```
-Servidor:   mail.daniloramos.dev.br
+Servidor:   mail.exemplo.com.br
 Porta:      587
 Segurança:  STARTTLS
 Requer autenticação: Sim
-Usuário:    contato@daniloramos.dev.br
+Usuário:    contato@exemplo.com.br
 Senha:      (sua senha)
 ```
 
@@ -186,7 +186,7 @@ Senha:      (sua senha)
 
 **Verificar:**
 ```bash
-telnet mail.daniloramos.dev.br 25
+telnet mail.exemplo.com.br 25
 # Se conectar = OK
 # Se timeout = bloqueado
 ```
@@ -202,13 +202,13 @@ cd /var/mailserver
 docker compose exec mailserver setup config dkim
 
 # 2. Ver chave pública
-cat /var/mailserver/config/opendkim/keys/daniloramos.dev.br/mail.txt
+cat /var/mailserver/config/opendkim/keys/exemplo.com.br/mail.txt
 
 # 3. Adicionar no DNS:
-#    mail._domainkey.daniloramos.dev.br TXT "v=DKIM1; k=rsa; p=CHAVE_AQUI"
+#    mail._domainkey.exemplo.com.br TXT "v=DKIM1; k=rsa; p=CHAVE_AQUI"
 
 # 4. Configurar PTR no painel do provedor
-#    SEU_IP → mail.daniloramos.dev.br
+#    SEU_IP → mail.exemplo.com.br
 ```
 
 ### Roundcube não conecta

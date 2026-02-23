@@ -52,7 +52,7 @@ echo "════════════════════════�
 echo ""
 
 # Solicitar domínio principal
-read -p "Digite o domínio principal para e-mail (ex: daniloramos.dev.br): " MAIL_DOMAIN
+read -p "Digite o domínio principal para e-mail (ex: exemplo.com.br): " MAIL_DOMAIN
 if [ -z "$MAIL_DOMAIN" ]; then
     log_error "Domínio não pode ser vazio"
     exit 1

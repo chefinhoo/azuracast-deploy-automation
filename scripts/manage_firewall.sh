@@ -346,7 +346,7 @@ main() {
                         echo -e "${GREEN}✓${NC} Portas bloqueadas com sucesso"
                         echo -e "${BLUE}ℹ${NC} Acesso agora apenas via:"
                         echo "     - Localhost: http://127.0.0.1:8080/ (para diagnóstico)"
-                        echo "     - Domínio: http://azura.gospelibipitanga.com.br/"
+                        echo "     - Domínio: http://azura.exemplo.com.br/"
                     else
                         echo "Cancelado."
                     fi
@@ -359,7 +359,7 @@ main() {
                         echo -e "${BLUE}ℹ${NC} Acesso agora disponível em:"
                         echo "     - IP direto: http://147.15.92.21:8080/"
                         echo "     - Localhost: http://127.0.0.1:8080/"
-                        echo "     - Domínio: http://azura.gospelibipitanga.com.br/"
+                        echo "     - Domínio: http://azura.exemplo.com.br/"
                     else
                         echo "Cancelado."
                     fi
