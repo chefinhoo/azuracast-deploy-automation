@@ -172,6 +172,32 @@ Acesse: `http://SEU_IP:81`
 
 ---
 
+## 🗑️ Desinstalar
+
+```bash
+# Simular sem remover nada (recomendado primeiro)
+sudo bash scripts/uninstall.sh --dry-run
+
+# Executar remoção completa com confirmação
+sudo bash scripts/uninstall.sh
+
+# Executar sem prompt interativo
+sudo bash scripts/uninstall.sh --yes
+```
+
+Remove o stack completo provisionado por este projeto:
+- AzuraCast + Nginx Proxy Manager
+- Roundcube + Filebrowser
+- Mailserver opcional (Postfix/Dovecot/PostfixAdmin)
+- Stacks WordPress criadas por `scripts/add_site.sh`
+- Regras de firewall aplicadas pelos scripts do projeto
+
+Observações:
+- A remoção Docker é focada nos recursos deste stack (não faz limpeza global de todos os containers/imagens do host).
+- Use `--dry-run` para revisar os comandos antes de executar em produção.
+
+---
+
 ## 🆘 Troubleshooting
 
 ### Containers não iniciam
