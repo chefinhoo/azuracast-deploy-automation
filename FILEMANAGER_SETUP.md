@@ -59,17 +59,427 @@ Logo na primeira vez que acessar, **MUDE A SENHA DO ADMIN**:
    - **Edit**: Modificar permissões e pasta raiz
    - **Delete**: Remover usuário
 
-## Gerenciar Usuários via CLI
+---
+
+## 🎯 Criar Usuários para Sites Específicos
+
+### Cenário: Um usuário por site WordPress
+
+Cada cliente/usuário deve ter acesso **apenas ao seu site**, sem ver os outros.
+
+### Passo 1: Acessar o Filebrowser
+
+```
+https://files.seudominio.com.br
+Login: admin / (sua senha)
+```
+
+### Passo 2: Criar Novo Usuário
+
+**Via Interface Web:**
+
+1. **Settings** (engrenagem) → **Users** → **New User**
+
+2. Preencher:
+   ```
+   Username: cliente1
+   Password: (senha forte)
+   Scope: /var/www/site-do-cliente1.com.br
+   ```
+
+3. **Permissions** (Permissões):
+   - ✅ `Download` - Baixar arquivos
+   - ✅ `Upload` - Enviar arquivos
+   - ✅ `Create` - Criar pastas/arquivos
+   - ✅ `Rename` - Renomear
+   - ✅ `Modify` - Editar arquivos
+   - ✅ `Delete` - Apagar
+   - ❌ `Share` - Compartilhar (desmarque para maior segurança)
+   - ❌ `Admin` - Administrador (somente para você)
+
+4. **Save**
+
+5. **Repetir** para cada cliente/site
+
+**Via CLI (mais rápido para múltiplos usuários):**
 
 ```bash
 cd /var/filemanager
 
-# Acessar container Filebrowser
-docker compose exec filemanager filebrowser hash sha256 -p "sua-nova-senha"
+# Criar usuário restrito ao site
+docker exec filemanager filebrowser users add cliente1 \
+  --password="SenhaForte123" \
+  --scope="/var/www/site-do-cliente1.com.br" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
 
-# Editar usuário via CLI
-docker compose exec filemanager filebrowser users update admin -p "nova-senha"
+# Criar mais usuários
+docker exec filemanager filebrowser users add cliente2 \
+  --password="OutraSenha456" \
+  --scope="/var/www/site-do-cliente2.com.br" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
 ```
+
+---
+
+## 📋 Exemplos Práticos
+
+### Exemplo 1: Cliente com WordPress
+
+```bash
+# Site: gospelibipitanga.com.br
+# Usuário: admin_gospel
+# Acesso: Apenas aos arquivos do WordPress
+
+docker exec filemanager filebrowser users add admin_gospel \
+  --password="Gospel@2026!" \
+  --scope="/var/www/gospelibipitanga.com.br" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
+```
+
+**O que o usuário vê:**
+```
+/ (raiz aparente)
+├── html/           (arquivos do WordPress)
+│   ├── wp-content/
+│   ├── wp-admin/
+│   └── index.php
+└── db_data/        (não acessível diretamente)
+```
+
+### Exemplo 2: Desenvolvedor com Acesso Total
+
+```bash
+# Usuário: dev_master
+# Acesso: Todos os sites
+
+docker exec filemanager filebrowser users add dev_master \
+  --password="DevMaster@2026!" \
+  --scope="/var/www" \
+  --perm.admin \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete \
+  --perm.share
+```
+
+**O que o usuário vê:**
+```
+/ (raiz aparente)
+├── site1.com.br/
+├── site2.com.br/
+├── gospelibipitanga.com.br/
+└── outrosite.com.br/
+```
+
+### Exemplo 3: Cliente Somente Leitura
+
+```bash
+# Usuário: cliente_view
+# Acesso: Apenas visualizar e baixar
+
+docker exec filemanager filebrowser users add cliente_view \
+  --password="View@2026!" \
+  --scope="/var/www/seusite.com.br" \
+  --perm.download
+```
+
+### Exemplo 4: Acesso ao AzuraCast
+
+```bash
+# Usuário: radio_admin
+# Acesso: Apenas arquivos do AzuraCast
+
+docker exec filemanager filebrowser users add radio_admin \
+  --password="Radio@2026!" \
+  --scope="/var/azuracast" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
+```
+
+---
+
+## 🔐 Estrutura de Permissões
+
+| Permissão | Descrição | Recomendado para |
+|-----------|-----------|------------------|
+| `download` | Baixar arquivos | Todos |
+| `upload` | Enviar arquivos | Clientes, Devs |
+| `create` | Criar pastas/arquivos | Clientes, Devs |
+| `rename` | Renomear arquivos | Clientes, Devs |
+| `modify` | Editar arquivos | Clientes, Devs |
+| `delete` | Apagar arquivos | **Com cuidado!** |
+| `share` | Gerar links públicos | Apenas Admin |
+| `admin` | Acesso administrativo | Apenas Você |
+
+---
+
+## 🛠️ Gerenciar Usuários via CLI
+
+### Listar Todos os Usuários
+
+```bash
+docker exec filemanager filebrowser users ls
+```
+
+**Saída exemplo:**
+```
++----+---------------+--------+-------------------------------+
+| ID | Username      | Admin  | Scope                         |
++----+---------------+--------+-------------------------------+
+| 1  | admin         | true   | /srv                          |
+| 2  | admin_gospel  | false  | /var/www/gospelibipitanga.com.br |
+| 3  | cliente1      | false  | /var/www/site1.com.br        |
++----+---------------+--------+-------------------------------+
+```
+
+### Modificar Usuário Existente
+
+```bash
+# Alterar senha
+docker exec filemanager filebrowser users update admin_gospel \
+  --password="NovaSenha@2026!"
+
+# Alterar scope (pasta raiz)
+docker exec filemanager filebrowser users update admin_gospel \
+  --scope="/var/www/outro-site.com.br"
+
+# Adicionar permissões
+docker exec filemanager filebrowser users update admin_gospel \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete \
+  --perm.share
+
+# Remover permissões (adicione "no-" antes)
+docker exec filemanager filebrowser users update admin_gospel \
+  --no-perm.delete \
+  --no-perm.share
+```
+
+### Remover Usuário
+
+```bash
+docker exec filemanager filebrowser users rm admin_gospel
+```
+
+### Verificar Configuração de um Usuário
+
+```bash
+# Listar e filtrar com grep
+docker exec filemanager filebrowser users ls | grep admin_gospel
+```
+
+---
+
+## 🔍 Troubleshooting de Permissões
+
+### Problema: Usuário não vê seus arquivos
+
+**Causa:** Scope incorreto ou pasta não existe
+
+**Solução:**
+```bash
+# 1. Verificar se a pasta existe
+ls -la /var/www/gospelibipitanga.com.br
+
+# 2. Se não existir, criar
+mkdir -p /var/www/gospelibipitanga.com.br/html
+
+# 3. Ajustar permissões
+chown -R www-data:www-data /var/www/gospelibipitanga.com.br
+
+# 4. Atualizar scope do usuário
+docker exec filemanager filebrowser users update admin_gospel \
+  --scope="/var/www/gospelibipitanga.com.br"
+```
+
+### Problema: "Permission denied" ao tentar criar/editar arquivos
+
+**Causa:** Permissões do sistema operacional
+
+**Solução:**
+```bash
+# Ajustar owner dos arquivos no host
+chown -R www-data:www-data /var/www/gospelibipitanga.com.br
+
+# Ajustar permissões
+chmod -R 755 /var/www/gospelibipitanga.com.br
+chmod -R 775 /var/www/gospelibipitanga.com.br/html/wp-content/uploads
+```
+
+### Problema: Usuário pode ver outros sites
+
+**Causa:** Scope muito abrangente (ex: `/var/www`)
+
+**Solução:**
+```bash
+# Restringir ao diretório específico
+docker exec filemanager filebrowser users update admin_gospel \
+  --scope="/var/www/gospelibipitanga.com.br"
+```
+
+### Problema: Não consigo fazer login
+
+**Causa 1:** Senha incorreta
+
+**Solução:**
+```bash
+# Resetar senha
+docker exec filemanager filebrowser users update admin_gospel \
+  --password="NovaSenha@2026!"
+```
+
+**Causa 2:** Usuário não existe
+
+**Solução:**
+```bash
+# Listar usuários
+docker exec filemanager filebrowser users ls
+
+# Se não existir, criar
+docker exec filemanager filebrowser users add admin_gospel \
+  --password="Senha@2026!" \
+  --scope="/var/www/gospelibipitanga.com.br" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
+```
+
+---
+
+## ✅ Melhores Práticas
+
+### 1. Segurança de Senhas
+```bash
+# ✅ Bom: Senha forte
+--password="Gospel@2026!XyZ"
+
+# ❌ Ruim: Senha fraca
+--password="123456"
+```
+
+### 2. Princípio do Menor Privilégio
+```bash
+# ✅ Bom: Acesso restrito ao necessário
+--scope="/var/www/cliente-site.com.br"
+--perm.download --perm.upload --perm.modify
+
+# ❌ Ruim: Acesso total desnecessário
+--scope="/var/www"
+--perm.admin --perm.delete --perm.share
+```
+
+### 3. Nomenclatura de Usuários
+```bash
+# ✅ Bom: Identificáveis
+admin_gospelibipitanga
+dev_maria_site1
+cliente_joao_site2
+
+# ❌ Ruim: Genéricos
+user1
+user2
+teste
+```
+
+### 4. Documentar Usuários Criados
+```bash
+# Criar arquivo de registro
+cat > /root/usuarios_filebrowser.txt << 'EOF'
+Usuário: admin_gospelibipitanga
+Senha: Gospel@2026!
+Scope: /var/www/gospelibipitanga.com.br
+Criado: 2026-01-04
+Finalidade: Administração do site igreja
+
+Usuário: dev_master
+Senha: DevMaster@2026!
+Scope: /var/www
+Criado: 2026-01-04
+Finalidade: Desenvolvedor com acesso total
+EOF
+
+# Proteger o arquivo
+chmod 600 /root/usuarios_filebrowser.txt
+```
+
+---
+
+## 📊 Script Auxiliar: Criar Múltiplos Usuários
+
+Crie o arquivo `/root/criar_usuarios_filebrowser.sh`:
+
+```bash
+#!/bin/bash
+
+# Criar usuários para múltiplos sites WordPress
+
+usuarios=(
+  "admin_gospelibipitanga:Gospel@2026!:/var/www/gospelibipitanga.com.br"
+  "admin_site2:Site2@2026!:/var/www/site2.com.br"
+  "admin_site3:Site3@2026!:/var/www/site3.com.br"
+)
+
+for dados in "${usuarios[@]}"; do
+  IFS=':' read -r usuario senha scope <<< "$dados"
+  
+  echo "Criando usuário: $usuario"
+  
+  docker exec filemanager filebrowser users add "$usuario" \
+    --password="$senha" \
+    --scope="$scope" \
+    --perm.download \
+    --perm.upload \
+    --perm.create \
+    --perm.rename \
+    --perm.modify \
+    --perm.delete
+  
+  echo "✓ Usuário $usuario criado com scope: $scope"
+  echo ""
+done
+
+echo "==================================="
+echo "Todos os usuários criados!"
+echo "==================================="
+docker exec filemanager filebrowser users ls
+```
+
+**Usar:**
+```bash
+chmod +x /root/criar_usuarios_filebrowser.sh
+/root/criar_usuarios_filebrowser.sh
+```
+
+---
 
 ## Permissões de Pasta
 
@@ -79,27 +489,12 @@ Cada usuário pode ter uma pasta raiz diferente (sandbox):
 1. Settings → Users → Selecionar usuário
 2. Alterar "Scope" (pasta visível)
 3. Exemplos:
-   - `/var/www/seudominio.com.br` - Apenas um site
+   - `/var/www/gospelibipitanga.com.br` - Apenas um site
    - `/var/www` - Todos os WordPress
    - `/var/azuracast` - Apenas AzuraCast
-   - `/` - Sistema inteiro (ser cautela)
+   - `/` - Sistema inteiro (com cautela)
 
-**Via CLI:**
-```bash
-cd /var/filemanager
-
-# Ver usuários
-docker compose exec filemanager filebrowser users list
-
-# Criar novo usuário
-docker compose exec filemanager filebrowser users add usuario senha
-
-# Definir pasta raiz (scope)
-docker compose exec filemanager filebrowser users update usuario -scope /var/www
-
-# Remover usuário
-docker compose exec filemanager filebrowser users delete usuario
-```
+---
 
 ## Configuração Avançada
 
@@ -374,6 +769,82 @@ docker compose up -d --build
 # Verificar versão
 docker compose exec filemanager filebrowser version
 ```
+
+---
+
+## 📖 Referência Rápida
+
+### Comandos Essenciais
+
+```bash
+# LISTAR USUÁRIOS
+docker exec filemanager filebrowser users ls
+
+# CRIAR USUÁRIO PARA UM SITE ESPECÍFICO
+docker exec filemanager filebrowser users add NOME_USUARIO \
+  --password="SENHA_FORTE" \
+  --scope="/var/www/DOMINIO.com.br" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
+
+# ALTERAR SENHA
+docker exec filemanager filebrowser users update NOME_USUARIO \
+  --password="NOVA_SENHA"
+
+# ALTERAR PASTA DE ACESSO (SCOPE)
+docker exec filemanager filebrowser users update NOME_USUARIO \
+  --scope="/var/www/NOVO_DOMINIO.com.br"
+
+# REMOVER USUÁRIO
+docker exec filemanager filebrowser users rm NOME_USUARIO
+
+# AJUSTAR PERMISSÕES DE ARQUIVOS NO HOST
+chown -R www-data:www-data /var/www/DOMINIO.com.br
+chmod -R 755 /var/www/DOMINIO.com.br
+```
+
+### Tabela de Scopes Comuns
+
+| Scope | Descrição | Uso |
+|-------|-----------|-----|
+| `/var/www/gospelibipitanga.com.br` | Um site específico | Cliente individual |
+| `/var/www` | Todos os sites WordPress | Desenvolvedor/Admin |
+| `/var/azuracast` | Arquivos do AzuraCast | Gerente de rádio |
+| `/var/filemanager/data` | Dados do Filebrowser | Backup/Manutenção |
+| `/` | Sistema completo | **Evitar!** |
+
+### Exemplo Completo: Adicionar Cliente
+
+```bash
+# 1. Verificar se a pasta do site existe
+ls -la /var/www/gospelibipitanga.com.br
+
+# 2. Criar usuário
+docker exec filemanager filebrowser users add admin_gospel \
+  --password="Gospel@2026!" \
+  --scope="/var/www/gospelibipitanga.com.br" \
+  --perm.download \
+  --perm.upload \
+  --perm.create \
+  --perm.rename \
+  --perm.modify \
+  --perm.delete
+
+# 3. Verificar criação
+docker exec filemanager filebrowser users ls | grep admin_gospel
+
+# 4. Informar cliente
+echo "Acesso ao Filebrowser:"
+echo "URL: https://files.seudominio.com.br"
+echo "Usuário: admin_gospel"
+echo "Senha: Gospel@2026!"
+```
+
+---
 
 ## Suporte
 

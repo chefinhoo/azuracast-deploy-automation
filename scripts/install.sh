@@ -35,6 +35,16 @@
 #     Acesso unificado a WordPress, AzuraCast e arquivos
 #     Padrão: 1 (habilitado)
 #
+#   export INSTALL_MAILSERVER=1
+#     Instala servidor de e-mail completo (Postfix + Dovecot + PostfixAdmin)
+#     Permite criar contas de e-mail via painel web
+#     Requer: Porta 25 liberada, DNS configurado (MX, A, SPF)
+#     Padrão: 0 (desabilitado)
+#
+#   export MAIL_DOMAIN="seudominio.com.br"
+#     Domínio principal para o servidor de e-mail
+#     Obrigatório se INSTALL_MAILSERVER=1
+#
 # FIREWALL:
 #   export BLOCK_DIRECT_AZURACAST_ACCESS=1
 #     Bloqueia acesso direto às portas do AzuraCast por IP
@@ -56,17 +66,17 @@
 #
 # Após a instalação, use o script manage_firewall.sh para:
 #
-#   sudo bash manage_firewall.sh
+#   sudo bash scripts/manage_firewall.sh
 #     Menu interativo com opções de bloquear/desbloquear/status
 #
-#   sudo bash manage_firewall.sh status
+#   sudo bash scripts/manage_firewall.sh status
 #     Verifica status atual das portas (bloqueadas ou abertas)
 #
-#   sudo bash manage_firewall.sh block
+#   sudo bash scripts/manage_firewall.sh block
 #     Bloqueia portas 8080, 8043, 2022, 9000-9999
 #     Recomendado para PRODUÇÃO
 #
-#   sudo bash manage_firewall.sh unblock
+#   sudo bash scripts/manage_firewall.sh unblock
 #     Desbloqueia portas (acesso direto por IP)
 #     Recomendado para DESENVOLVIMENTO
 #
@@ -970,6 +980,289 @@ JSON_EOL
 }
 
 # ==========================================================
+# SERVIDOR DE E-MAIL COMPLETO
+# ==========================================================
+setup_mailserver() {
+    local install_mailserver
+    install_mailserver="${INSTALL_MAILSERVER:-0}"
+    
+    if [ "$install_mailserver" != "1" ]; then
+        log_info "Servidor de e-mail desabilitado (INSTALL_MAILSERVER=0)"
+        return 0
+    fi
+    
+    print_section "INSTALAÇÃO DO SERVIDOR DE E-MAIL"
+    
+    local mail_domain="${MAIL_DOMAIN}"
+    
+    # Solicitar domínio se não foi definido
+    if [ -z "$mail_domain" ]; then
+        echo ""
+        log_info "Configure o servidor de e-mail completo com PostfixAdmin"
+        read -p "Digite o domínio principal para e-mail (ex: daniloramos.dev.br): " mail_domain
+        
+        if [ -z "$mail_domain" ]; then
+            log_warn "Domínio não fornecido, pulando instalação do servidor de e-mail"
+            return 0
+        fi
+    fi
+    
+    local hostname="mail.$mail_domain"
+    
+    log_info "Domínio de e-mail: $mail_domain"
+    log_info "Hostname do servidor: $hostname"
+    
+    # Avisos importantes
+    echo ""
+    log_warn "═══════════════════════════════════════════════════════"
+    log_warn "  ⚠️  REQUISITOS PARA SERVIDOR DE E-MAIL"
+    log_warn "═══════════════════════════════════════════════════════"
+    echo ""
+    echo "1. DNS - Configure ANTES de continuar:"
+    echo "   • Registro A: mail.$mail_domain → SEU_IP_PUBLICO"
+    echo "   • Registro MX: $mail_domain → mail.$mail_domain (prioridade 10)"
+    echo "   • Registro TXT (SPF): $mail_domain → \"v=spf1 mx ~all\""
+    echo ""
+    echo "2. Portas necessárias (firewall):"
+    echo "   • 25 (SMTP) - Alguns provedores bloqueiam!"
+    echo "   • 587 (Submission)"
+    echo "   • 993 (IMAPS)"
+    echo ""
+    echo "3. Hostname do servidor será: $hostname"
+    echo ""
+    log_warn "═══════════════════════════════════════════════════════"
+    echo ""
+    
+    read -p "DNS configurado e pronto para continuar? (s/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[SsYy]$ ]]; then
+        log_warn "Instalação do servidor de e-mail cancelada"
+        log_info "Configure o DNS e execute: export INSTALL_MAILSERVER=1 MAIL_DOMAIN=$mail_domain"
+        return 0
+    fi
+    
+    local mail_dir="/var/mailserver"
+    local vmail_dir="/var/vmail"
+    
+    # Gerar senhas
+    local mysql_root_password=$(openssl rand -base64 24)
+    local postfix_db_password=$(openssl rand -base64 24)
+    local postfixadmin_setup_password=$(openssl rand -base64 24)
+    
+    log_info "Criando estrutura de diretórios..."
+    mkdir -p "$mail_dir" "$mail_dir/config" "$vmail_dir" || { log_error "Falha ao criar diretórios"; return 1; }
+    chmod 770 "$vmail_dir"
+    
+    # Configurar hostname
+    log_info "Configurando hostname do sistema..."
+    hostnamectl set-hostname "$hostname"
+    echo "$hostname" > /etc/hostname
+    
+    cd "$mail_dir" || { log_error "Falha ao acessar diretório"; return 1; }
+    
+    # Docker Compose
+    log_info "Criando docker-compose.yml..."
+    cat > "$mail_dir/docker-compose.yml" <<EOF
+services:
+  # MySQL para contas virtuais
+  mail-mysql:
+    image: mariadb:10.11
+    container_name: mail-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${mysql_root_password}"
+      MYSQL_DATABASE: "postfix"
+      MYSQL_USER: "postfix"
+      MYSQL_PASSWORD: "${postfix_db_password}"
+    volumes:
+      - mail_mysql_data:/var/lib/mysql
+      - ./init-mailserver.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - mailserver_network
+
+  # Postfix + Dovecot
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: ${hostname}
+    domainname: ${mail_domain}
+    restart: unless-stopped
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+    environment:
+      - OVERRIDE_HOSTNAME=${hostname}
+      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=1
+      - ONE_DIR=1
+      - DMS_DEBUG=0
+      - PERMIT_DOCKER=network
+    volumes:
+      - mail_data:/var/mail
+      - mail_state:/var/mail-state
+      - mail_logs:/var/log/mail
+      - ./config:/tmp/docker-mailserver:rw
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - mailserver_network
+      - proxy_manager_npm_network
+
+  # PostfixAdmin
+  postfixadmin:
+    image: postfixadmin/postfixadmin:latest
+    container_name: postfixadmin
+    restart: unless-stopped
+    ports:
+      - "8888:80"
+    environment:
+      POSTFIXADMIN_DB_TYPE: "mysqli"
+      POSTFIXADMIN_DB_HOST: "mail-mysql"
+      POSTFIXADMIN_DB_NAME: "postfix"
+      POSTFIXADMIN_DB_USER: "postfix"
+      POSTFIXADMIN_DB_PASSWORD: "${postfix_db_password}"
+      POSTFIXADMIN_SMTP_SERVER: "mailserver"
+      POSTFIXADMIN_SMTP_PORT: "25"
+      POSTFIXADMIN_SETUP_PASSWORD: "${postfixadmin_setup_password}"
+    depends_on:
+      - mail-mysql
+      - mailserver
+    networks:
+      - mailserver_network
+      - proxy_manager_npm_network
+
+volumes:
+  mail_mysql_data:
+  mail_data:
+  mail_state:
+  mail_logs:
+
+networks:
+  mailserver_network:
+    driver: bridge
+  proxy_manager_npm_network:
+    external: true
+EOF
+
+    # Script SQL
+    log_info "Criando schema do banco de dados..."
+    cat > "$mail_dir/init-mailserver.sql" <<'SQLEOF'
+CREATE TABLE IF NOT EXISTS admin (
+    username VARCHAR(255) NOT NULL PRIMARY KEY,
+    password VARCHAR(255) NOT NULL,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS domain (
+    domain VARCHAR(255) NOT NULL PRIMARY KEY,
+    description VARCHAR(255),
+    aliases INT(10) NOT NULL DEFAULT 0,
+    mailboxes INT(10) NOT NULL DEFAULT 0,
+    maxquota BIGINT(20) NOT NULL DEFAULT 0,
+    quota BIGINT(20) NOT NULL DEFAULT 0,
+    transport VARCHAR(255),
+    backupmx TINYINT(1) NOT NULL DEFAULT 0,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS mailbox (
+    username VARCHAR(255) NOT NULL PRIMARY KEY,
+    password VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    maildir VARCHAR(255) NOT NULL,
+    quota BIGINT(20) NOT NULL DEFAULT 0,
+    local_part VARCHAR(255) NOT NULL,
+    domain VARCHAR(255) NOT NULL,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY (domain) REFERENCES domain(domain) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS alias (
+    address VARCHAR(255) NOT NULL PRIMARY KEY,
+    goto TEXT NOT NULL,
+    domain VARCHAR(255) NOT NULL,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY (domain) REFERENCES domain(domain) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_mailbox_domain ON mailbox(domain);
+CREATE INDEX idx_alias_domain ON alias(domain);
+SQLEOF
+
+    log_info "Iniciando containers do servidor de e-mail..."
+    if docker compose up -d; then
+        log_success "Servidor de e-mail iniciado!"
+        sleep 30
+        echo "mailserver" >> /tmp/deployed_services
+    else
+        log_error "Falha ao iniciar servidor de e-mail"
+        return 1
+    fi
+    
+    # Configurar Roundcube
+    log_info "Configurando Roundcube para usar servidor local..."
+    if [ -f "/var/webmail/docker-compose.yml" ]; then
+        cp /var/webmail/docker-compose.yml /var/webmail/docker-compose.yml.bak 2>/dev/null || true
+        
+        sed -i "s|ROUNDCUBEMAIL_SMTP_SERVER:.*|ROUNDCUBEMAIL_SMTP_SERVER: \"mailserver\"|" /var/webmail/docker-compose.yml
+        sed -i "s|ROUNDCUBEMAIL_SMTP_PORT:.*|ROUNDCUBEMAIL_SMTP_PORT: \"587\"|" /var/webmail/docker-compose.yml
+        sed -i "s|ROUNDCUBEMAIL_IMAP_HOST:.*|ROUNDCUBEMAIL_IMAP_HOST: \"mailserver\"|" /var/webmail/docker-compose.yml
+        sed -i "s|ROUNDCUBEMAIL_IMAP_PORT:.*|ROUNDCUBEMAIL_IMAP_PORT: \"993\"|" /var/webmail/docker-compose.yml
+        
+        docker network connect mailserver_network webmail 2>/dev/null || true
+        docker network connect mailserver_network webmail-nginx 2>/dev/null || true
+        
+        (cd /var/webmail && docker compose restart) || log_warn "Falha ao reiniciar Roundcube"
+    fi
+    
+    # Salvar credenciais
+    local credentials_file="$mail_dir/credentials.txt"
+    cat > "$credentials_file" <<EOF
+════════════════════════════════════════════════════════
+  📧 CREDENCIAIS DO SERVIDOR DE E-MAIL
+════════════════════════════════════════════════════════
+
+DOMÍNIO: $mail_domain
+HOSTNAME: $hostname
+
+MYSQL:
+  Senha Root: $mysql_root_password
+  Senha Postfix: $postfix_db_password
+
+POSTFIXADMIN:
+  URL: http://$(hostname -I | awk '{print $1}'):8888
+  Setup Password: $postfixadmin_setup_password
+
+SMTP/IMAP (clientes):
+  SMTP: mail.$mail_domain:587
+  IMAP: mail.$mail_domain:993
+
+════════════════════════════════════════════════════════
+EOF
+    chmod 600 "$credentials_file"
+    
+    log_success "Servidor de e-mail instalado!"
+    log_info "Credenciais salvas em: $credentials_file"
+    log_info ""
+    log_info "Próximos passos:"
+    log_info "  1. Configurar proxy para PostfixAdmin (mailadmin.$mail_domain → postfixadmin:80)"
+    log_info "  2. Acessar https://mailadmin.$mail_domain/setup.php"
+    log_info "  3. Ver: MAILSERVER_QUICKSTART.md"
+    
+    return 0
+}
+
+# ==========================================================
 # CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
@@ -1236,47 +1529,178 @@ display_summary() {
     echo "   Acessar via Nginx Proxy Manager: https://files.$domain"
     echo
     
+    # Verificar se mailserver foi instalado
+    if grep -q "mailserver" /tmp/deployed_services 2>/dev/null; then
+        echo "📧 Servidor de E-mail"
+        echo "   Status: Instalado ✓"
+        echo "   PostfixAdmin: http://$public_ip:8888"
+        echo "   Credenciais: /var/mailserver/credentials.txt"
+        if [ -n "$MAIL_DOMAIN" ]; then
+            echo "   Domínio: $MAIL_DOMAIN"
+            echo "   SMTP: mail.$MAIL_DOMAIN:587"
+            echo "   IMAP: mail.$MAIL_DOMAIN:993"
+        fi
+        echo "   Ver: MAILSERVER_QUICKSTART.md"
+        echo
+    fi
+    
     echo "----- PRÓXIMOS PASSOS -----"
     echo "1. Acessar painel do Nginx Proxy Manager"
-    echo "2. Criar Proxy Hosts para:"
+    echo "   URL: http://$public_ip:$NPM_ADMIN_PORT"
+    echo "   Login: admin@example.com / changeme"
+    echo "   IMPORTANTE: Altere email e senha imediatamente!"
+    echo ""
+    echo "2. Criar Proxy Hosts para cada serviço:"
+    echo "   Menu: Hosts → Proxy Hosts → Add Proxy Host"
+    echo ""
     if [ -n "$domain" ]; then
-        echo "   - $domain → http://wp-app-${domain//./-}:80"
-        echo "     (Use o nome do container, não localhost/IP)"
+        echo "   📌 WordPress: $domain"
+        echo "      Domain Names: $domain www.$domain"
+        echo "      Forward To: wp-app-${domain//./-}:80"
+        echo "      ✓ Cache Assets, Block Common Exploits"
         echo ""
-        echo "   - azura.$domain → http://azuracast:$AZURACAST_HTTP_PORT"
-        echo "     (Use 'azuracast', não localhost/IP)"
+        echo "   📌 AzuraCast: radio.$domain"
+        echo "      Domain Names: radio.$domain"
+        echo "      Forward To: azuracast:$AZURACAST_HTTP_PORT"
+        echo "      ✓ Cache Assets, Block Common Exploits, Websockets Support"
         echo ""
-        echo "   - webmail.$domain → http://webmail-nginx:80"
-        echo "     (Para Roundcube)"
+        echo "   📌 Webmail: webmail.$domain"
+        echo "      Domain Names: webmail.$domain"
+        echo "      Forward To: webmail-nginx:80"
+        echo "      ✓ Cache Assets, Block Common Exploits"
         echo ""
-        echo "   - files.$domain → http://filemanager:80"
-        echo "     (Para Filebrowser)"
+        echo "   📌 Filebrowser: files.$domain"
+        echo "      Domain Names: files.$domain"
+        echo "      Forward To: filemanager:80"
+        echo "      ✓ Block Common Exploits, Websockets Support"
+        echo ""
+        if grep -q "mailserver" /tmp/deployed_services 2>/dev/null; then
+            echo "   📌 PostfixAdmin: mail.$domain"
+            echo "      Domain Names: mail.$domain"
+            echo "      Forward To: postfixadmin:80"
+            echo "      ✓ Block Common Exploits"
+            echo ""
+        fi
     else
-        echo "   - seudominio.com → http://azuracast:$AZURACAST_HTTP_PORT"
-        echo "     (Use 'azuracast', não localhost/IP)"
-        echo "   - webmail.seudominio.com → http://webmail-nginx:80"
-        echo "   - files.seudominio.com → http://filemanager:80"
+        echo "   📌 AzuraCast: radio.seudominio.com.br"
+        echo "      Forward To: azuracast:$AZURACAST_HTTP_PORT"
+        echo ""
+        echo "   📌 Webmail: webmail.seudominio.com.br"
+        echo "      Forward To: webmail-nginx:80"
+        echo ""
+        echo "   📌 Filebrowser: files.seudominio.com.br"
+        echo "      Forward To: filemanager:80"
+        echo ""
     fi
-    echo "3. Gerar certificados SSL com Let's Encrypt"
-    echo "4. Ativar 'Force SSL' nos Proxy Hosts"
+    echo "3. Configurar SSL (Let's Encrypt) para cada Proxy Host:"
+    echo "   Aba SSL → Request a new SSL Certificate"
+    echo "   ✓ Force SSL, HTTP/2 Support, HSTS Enabled"
+    echo "   Email: seu@email.com"
+    echo "   ✓ I Agree to the Let's Encrypt Terms of Service"
     echo ""
-    echo "5. IMPORTANTE - Configurar Roundcube:"
-    echo "   - Editar: /var/webmail/docker-compose.yml"
-    echo "   - Definir SMTP_SERVER e IMAP_HOST"
-    echo "   - Reiniciar: cd /var/webmail && docker compose restart"
-    echo "   - Ver: WEBMAIL_SETUP.md"
+    echo "4. Criar Usuários no Filebrowser:"
+    if [ -n "$domain" ]; then
+        echo "   Via CLI (recomendado):"
+        echo "   $ docker exec filemanager filebrowser users add cliente1 \\"
+        echo "     --password=\"SenhaForte123!\" \\"
+        echo "     --scope=\"/var/www/$domain\" \\"
+        echo "     --perm.download --perm.upload --perm.create --perm.modify"
+        echo ""
+        echo "   Via Web: https://files.$domain"
+    else
+        echo "   $ docker exec filemanager filebrowser users add cliente1 \\"
+        echo "     --password=\"SenhaForte123!\" \\"
+        echo "     --scope=\"/var/www/seusite.com.br\" \\"
+        echo "     --perm.download --perm.upload --perm.create --perm.modify"
+        echo ""
+    fi
+    echo "   Login padrão: admin / password (ALTERE IMEDIATAMENTE!)"
+    echo "   Settings → Users → New User"
     echo ""
-    echo "6. IMPORTANTE - Configurar Filebrowser:"
-    echo "   - Acessar: https://files.$domain"
-    echo "   - Login padrão: admin / password"
-    echo "   - Alterar senha em Settings"
-    echo "   - Ver: FILEMANAGER_SETUP.md"
-    echo
-    echo "� GERENCIAMENTO DE FIREWALL"
+    
+    # Instruções específicas para servidor de e-mail
+    if grep -q "mailserver" /tmp/deployed_services 2>/dev/null; then
+        echo "5. Criar Contas de E-mail no PostfixAdmin:"
+        if [ -n "$domain" ]; then
+            echo "   URL: https://mail.$domain"
+        else
+            echo "   URL: http://$public_ip:8888"
+        fi
+        echo "   Credenciais: cat /var/mailserver/credentials.txt"
+        echo ""
+        echo "   Após login:"
+        echo "   - Menu: Virtual List → Add Mailbox"
+        echo "   - Username: nome@$MAIL_DOMAIN"
+        echo "   - Password: senha forte"
+        echo "   - Quota: 1024 MB (ajuste conforme necessário)"
+        echo ""
+        echo "6. Configurar Roundcube para usar o Servidor Local:"
+        echo "   Já configurado automaticamente!"
+        if [ -n "$MAIL_DOMAIN" ]; then
+            echo "   SMTP: mail.$MAIL_DOMAIN:587"
+            echo "   IMAP: mail.$MAIL_DOMAIN:993"
+        fi
+        echo ""
+    else
+        echo "5. Configurar Roundcube (SMTP/IMAP externo):"
+        echo "   Editar: /var/webmail/docker-compose.yml"
+        echo "   Definir: SMTP_SERVER, IMAP_HOST"
+        echo "   Reiniciar: cd /var/webmail && docker compose restart"
+        echo "   Ver: WEBMAIL_SETUP.md"
+        echo ""
+    fi
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📖 DOCUMENTAÇÃO COMPLETA"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "📄 README.md"
+    echo "   Guia de uso geral e referência rápida"
+    echo ""
+    echo "📄 FILEMANAGER_SETUP.md"
+    echo "   Como criar usuários com acesso restrito por site"
+    echo "   Gerenciar permissões e pastas"
+    echo ""
+    if grep -q "mailserver" /tmp/deployed_services 2>/dev/null; then
+        echo "📄 MAILSERVER_QUICKSTART.md"
+        echo "   Servidor de e-mail em 5 minutos"
+        echo ""
+        echo "📄 MAILSERVER_SETUP.md"
+        echo "   Guia completo: DNS, DKIM, DMARC, troubleshooting"
+        echo ""
+    fi
+    echo "📄 WEBMAIL_SETUP.md"
+    echo "   Configurar SMTP/IMAP para Roundcube"
+    echo ""
+    echo "📄 TROUBLESHOOTING_PROXY.md"
+    echo "   Resolver problemas de conectividade e proxy"
+    echo ""
+    echo "📄 AUTOMATED_INSTALL.md"
+    echo "   Instalação não-interativa com variáveis"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "🔧 SCRIPTS DE DIAGNÓSTICO"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Problema de acesso via proxy (502/503):"
+    echo "  $ sudo bash scripts/fix_proxy_issues.sh"
+    echo ""
+    echo "Diagnóstico completo:"
+    echo "  $ sudo bash scripts/diagnose_proxy.sh"
+    echo ""
+    echo "Correção rápida (sem reiniciar containers):"
+    echo "  $ sudo bash scripts/quick_fix_networks.sh"
+    echo ""
+    echo "Adicionar novo site WordPress:"
+    echo "  $ sudo bash scripts/add_site.sh"
+    echo ""
+    
+    echo "🛡️ GERENCIAMENTO DE FIREWALL"
     echo "   As portas estão ABERTAS por padrão (acesso direto por IP permitido)"
     echo ""
     echo "   Para PRODUÇÃO, recomenda-se BLOQUEAR o acesso direto:"
-    echo "   $ sudo bash manage_firewall.sh"
+    echo "   $ sudo bash scripts/manage_firewall.sh"
     echo ""
     echo "   Menu interativo:"
     echo "     1) Ver status das portas"
@@ -1284,17 +1708,48 @@ display_summary() {
     echo "     3) Desbloquear portas (acesso direto por IP)"
     echo ""
     echo "   Ou modo comando:"
-    echo "     $ sudo bash manage_firewall.sh status    # Verificar"
-    echo "     $ sudo bash manage_firewall.sh block      # Bloquear"
-    echo "     $ sudo bash manage_firewall.sh unblock    # Desbloquear"
+    echo "     $ sudo bash scripts/manage_firewall.sh status    # Verificar"
+    echo "     $ sudo bash scripts/manage_firewall.sh block      # Bloquear"
+    echo "     $ sudo bash scripts/manage_firewall.sh unblock    # Desbloquear"
     echo ""
     echo "   Comportamento:"
     echo "     • Localhost (127.0.0.1) sempre permitido para diagnóstico"
     echo "     • Quando bloqueado: acesso apenas via domínio (DNS) ou proxy"
     echo "     • Quando desbloqueado: acesso também via IP:porta"
     echo
-    echo "�📋 Logs: $LOG_FILE"
-    print_separator
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✅ CHECKLIST DE CONFIGURAÇÃO"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Siga estes passos na ordem:"
+    echo ""
+    echo "1. [ ] Configurar Nginx Proxy Manager (http://$public_ip:$NPM_ADMIN_PORT)"
+    echo "       Login: admin@example.com / changeme → Alterar senha!"
+    echo ""
+    echo "2. [ ] Criar Proxy Hosts com SSL (Force SSL + HTTP/2)"
+    echo "       Ver lista completa na mensagem acima"
+    echo ""
+    echo "3. [ ] Criar usuários no Filebrowser com scope restrito"
+    echo "       docker exec filemanager filebrowser users add ..."
+    echo ""
+    if grep -q "mailserver" /tmp/deployed_services 2>/dev/null; then
+        echo "4. [ ] Criar contas de e-mail no PostfixAdmin"
+        echo "       Virtual List → Add Mailbox"
+        echo ""
+        echo "5. [ ] Configurar DNS (MX, SPF, DKIM) - Ver MAILSERVER_SETUP.md"
+        echo ""
+        echo "6. [ ] Testar acesso HTTPS a todos os serviços"
+        echo ""
+        echo "7. [ ] Produção: sudo bash scripts/manage_firewall.sh block"
+    else
+        echo "4. [ ] Testar acesso HTTPS a todos os serviços"
+        echo ""
+        echo "5. [ ] Produção: sudo bash scripts/manage_firewall.sh block"
+    fi
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📋 Logs: $LOG_FILE"
 }
 
 # ==========================================================
@@ -1334,6 +1789,7 @@ main() {
     setup_static_site || { log_error "Setup WordPress falhou"; exit 1; }
     setup_webmail || log_warn "Setup de Webmail falhou ou foi desabilitado"
     setup_filemanager || log_warn "Setup de Gerenciador de Arquivos falhou ou foi desabilitado"
+    setup_mailserver || log_warn "Setup de Servidor de E-mail falhou ou foi desabilitado"
     
     # Criar vhost (opcional)
     if [ "${PROMPT_FOR_DOMAIN:-1}" = "1" ]; then

@@ -153,3 +153,27 @@ DISABLE_NETWORK_HARDENING=0
 FIREWALL_INTERFACE=""
 
 # ==========================================================
+# SERVIÇOS ADICIONAIS
+# ==========================================================
+
+# Instalar Roundcube Webmail (1 = sim, 0 = não)
+# Install Roundcube Webmail (1 = yes, 0 = no)
+INSTALL_WEBMAIL=1
+
+# Instalar Filebrowser (1 = sim, 0 = não)
+# Install Filebrowser (1 = yes, 0 = no)
+INSTALL_FILEMANAGER=1
+
+# Instalar Servidor de E-mail Completo (1 = sim, 0 = não)
+# Install Complete Mail Server (1 = yes, 0 = no)
+# Requer: Porta 25 liberada, DNS configurado
+# Requires: Port 25 open, DNS configured
+INSTALL_MAILSERVER=0
+
+# Domínio principal para o servidor de e-mail
+# Main domain for mail server
+# Obrigatório se INSTALL_MAILSERVER=1
+# Required if INSTALL_MAILSERVER=1
+MAIL_DOMAIN=""
+
+# ==========================================================
