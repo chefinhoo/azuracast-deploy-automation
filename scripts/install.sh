@@ -149,8 +149,6 @@ setup_nginx_proxy_manager() {
     log_info "Criando docker-compose para Nginx Proxy Manager..."
     cat > "${PROXY_MANAGER_DIR}/docker-compose.yml" <<'EOL' || \
         { log_error "Falha ao criar docker-compose"; return 1; }
-version: "3.8"
-
 services:
   app:
     image: jc21/nginx-proxy-manager:latest
@@ -167,14 +165,10 @@ services:
       DB_MYSQL_PASSWORD: "npm"
       DB_MYSQL_NAME: "npm"
       DISABLE_IPV6: "true"
-      # Otimizações
-      PHP_MEMORY_LIMIT: "256M"
-      PHP_MAX_EXECUTION_TIME: "300"
-      # Nginx worker processes (auto = número de CPUs)
-      NGINX_WORKER_PROCESSES: "auto"
     volumes:
       - app_data:/data
       - app_letsencrypt:/etc/letsencrypt
+      - ./nginx-custom:/data/nginx/custom:ro
     depends_on:
       - db
     networks:
@@ -182,7 +176,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1024M
         reservations:
           memory: 256M
     healthcheck:
@@ -231,6 +225,75 @@ networks:
   npm_network:
     driver: bridge
 EOL
+    
+    # Criar configurações customizadas do Nginx para performance
+    log_info "Criando configurações otimizadas do Nginx..."
+    mkdir -p "${PROXY_MANAGER_DIR}/nginx-custom"
+    
+    cat > "${PROXY_MANAGER_DIR}/nginx-custom/http_top.conf" <<'NGINX_EOF'
+# Configurações de Performance NPM
+# Carregadas automaticamente no contexto http
+
+# Timeouts otimizados
+proxy_connect_timeout 300s;
+proxy_send_timeout 300s;
+proxy_read_timeout 300s;
+send_timeout 300s;
+
+client_header_timeout 60s;
+client_body_timeout 60s;
+
+keepalive_timeout 65s;
+keepalive_requests 100;
+
+# Buffers otimizados
+client_body_buffer_size 128k;
+client_max_body_size 512m;
+client_header_buffer_size 4k;
+large_client_header_buffers 4 16k;
+
+proxy_buffer_size 16k;
+proxy_buffers 32 16k;
+proxy_busy_buffers_size 64k;
+
+# FastCGI
+fastcgi_buffer_size 16k;
+fastcgi_buffers 16 16k;
+fastcgi_busy_buffers_size 32k;
+
+# Gzip Compression
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 6;
+gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
+gzip_disable "msie6";
+gzip_min_length 256;
+
+# DNS Resolver
+resolver 8.8.8.8 8.8.4.4 1.1.1.1 valid=300s;
+resolver_timeout 10s;
+
+# Proxy Headers
+proxy_http_version 1.1;
+proxy_set_header Connection "";
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+
+# TCP Settings
+tcp_nodelay on;
+tcp_nopush on;
+
+# File handling
+sendfile on;
+sendfile_max_chunk 512k;
+
+# Hide version
+server_tokens off;
+NGINX_EOF
+
+    log_success "Configurações do Nginx criadas"
     
     log_info "Iniciando containers do Nginx Proxy Manager..."
     cd "$PROXY_MANAGER_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
@@ -763,6 +826,7 @@ services:
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
       - ./html:/var/www/html
+      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     networks:
       - wp_network
 
@@ -771,6 +835,85 @@ networks:
     name: ${wp_network_name}
     driver: bridge
 EOF
+
+    # Criar configuração PHP otimizada
+    log_info "Criando configurações PHP otimizadas..."
+    cat > "$domain_path/php-custom.ini" <<'PHP_EOF'
+; Configurações de Performance PHP
+memory_limit = 256M
+upload_max_filesize = 64M
+post_max_size = 64M
+max_execution_time = 300
+max_input_time = 300
+
+; OPcache
+opcache.enable = 1
+opcache.memory_consumption = 128
+opcache.interned_strings_buffer = 8
+opcache.max_accelerated_files = 10000
+opcache.revalidate_freq = 2
+opcache.fast_shutdown = 1
+
+; Realpath Cache
+realpath_cache_size = 4096K
+realpath_cache_ttl = 600
+PHP_EOF
+
+    # Criar .htaccess otimizado
+    log_info "Criando .htaccess otimizado..."
+    cat > "$domain_path/html/.htaccess" <<'HTACCESS_EOF'
+# BEGIN WordPress Optimization
+
+# Compressão GZIP
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/x-javascript application/json application/xml application/rss+xml
+</IfModule>
+
+# Cache de navegador
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/pdf "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresDefault "access plus 2 days"
+</IfModule>
+
+# Headers de Cache
+<IfModule mod_headers.c>
+    <FilesMatch "\\.(ico|jpe?g|png|gif|webp|css|js|woff2?)$">
+        Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+</IfModule>
+
+# Desabilitar ETags
+<IfModule mod_headers.c>
+    Header unset ETag
+</IfModule>
+FileETag None
+
+# END WordPress Optimization
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /
+RewriteRule ^index\\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS_EOF
+
+    log_success "Configurações otimizadas criadas"
 
     log_info "Iniciando stack WordPress..."
     if ! (cd "$domain_path" && docker compose up -d); then

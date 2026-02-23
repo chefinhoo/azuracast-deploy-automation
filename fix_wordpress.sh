@@ -122,6 +122,7 @@ services:
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
       - ./html:/var/www/html
+      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     networks:
       - wp_network
 
@@ -132,6 +133,73 @@ networks:
 EOF
     
     echo -e "${GREEN}  ✓${NC} docker-compose.yml correto criado"
+    
+    # Criar arquivo de configuração PHP otimizado
+    cat > "$wp_dir/php-custom.ini" <<'PHPINI'
+; Otimizações de Performance PHP para WordPress
+memory_limit = 256M
+upload_max_filesize = 64M
+post_max_size = 64M
+max_execution_time = 300
+max_input_time = 300
+
+; OPcache para melhorar performance
+opcache.enable=1
+opcache.memory_consumption=128
+opcache.interned_strings_buffer=8
+opcache.max_accelerated_files=10000
+opcache.revalidate_freq=2
+opcache.fast_shutdown=1
+PHPINI
+    
+    echo -e "${GREEN}  ✓${NC} php-custom.ini criado com otimizações"
+    
+    # Criar .htaccess otimizado se não existir
+    if [ ! -f "$wp_dir/html/.htaccess" ]; then
+        cat > "$wp_dir/html/.htaccess" <<'HTACCESS'
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+
+# Compressão Gzip
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Cache do navegador
+<IfModule mod_expires.c>
+ExpiresActive On
+ExpiresByType image/jpg "access plus 1 year"
+ExpiresByType image/jpeg "access plus 1 year"
+ExpiresByType image/gif "access plus 1 year"
+ExpiresByType image/png "access plus 1 year"
+ExpiresByType image/webp "access plus 1 year"
+ExpiresByType text/css "access plus 1 month"
+ExpiresByType application/javascript "access plus 1 month"
+ExpiresByType application/pdf "access plus 1 month"
+</IfModule>
+
+<IfModule mod_headers.c>
+<FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico)$">
+Header set Cache-Control "max-age=31536000, public"
+</FilesMatch>
+<FilesMatch "\.(css|js)$">
+Header set Cache-Control "max-age=2592000, public"
+</FilesMatch>
+</IfModule>
+HTACCESS
+        
+        echo -e "${GREEN}  ✓${NC} .htaccess criado com otimizações de cache e compressão"
+    else
+        echo -e "${YELLOW}  →${NC} .htaccess já existe, não foi sobrescrito"
+    fi
     
     # Iniciar stack WordPress
     if docker compose up -d; then

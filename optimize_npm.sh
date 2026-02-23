@@ -41,7 +41,6 @@ echo "  • Configurações de buffer otimizadas"
 echo "  • Timeouts aumentados para streaming"
 echo "  • Keepalive connections"
 echo "  • DNS resolver rápido"
-echo "  • Worker processes otimizados"
 echo "  • Gzip compression"
 echo ""
 
@@ -55,100 +54,72 @@ echo ""
 echo -e "${BLUE}[→]${NC} Criando configurações otimizadas..."
 
 # Criar diretório para configurações customizadas
-mkdir -p "$PROXY_MANAGER_DIR/nginx-config"
+mkdir -p "$PROXY_MANAGER_DIR/nginx-custom"
 
-# Criar arquivo de configuração otimizado
-cat > "$PROXY_MANAGER_DIR/nginx-config/custom.conf" <<'EOF'
+# Criar arquivo de configuração otimizado (contexto http)
+cat > "$PROXY_MANAGER_DIR/nginx-custom/http.conf" <<'EOF'
 # ====================================
 # Configurações de Performance NPM
+# (arquivo incluso dentro do bloco http)
 # ====================================
 
-# Worker Processes (ajusta automaticamente para o número de CPUs)
-worker_processes auto;
-worker_rlimit_nofile 65535;
+# Timeouts otimizados
+proxy_connect_timeout 300s;
+proxy_send_timeout 300s;
+proxy_read_timeout 300s;
+send_timeout 300s;
 
-events {
-    worker_connections 4096;
-    use epoll;
-    multi_accept on;
-}
+client_header_timeout 60s;
+client_body_timeout 60s;
 
-http {
-    # Timeouts otimizados
-    proxy_connect_timeout 300s;
-    proxy_send_timeout 300s;
-    proxy_read_timeout 300s;
-    send_timeout 300s;
-    
-    client_header_timeout 60s;
-    client_body_timeout 60s;
-    
-    keepalive_timeout 65s;
-    keepalive_requests 100;
-    
-    # Buffers otimizados
-    client_body_buffer_size 128k;
-    client_max_body_size 256m;
-    client_header_buffer_size 4k;
-    large_client_header_buffers 4 16k;
-    
-    proxy_buffer_size 8k;
-    proxy_buffers 16 8k;
-    proxy_busy_buffers_size 16k;
-    
-    # FastCGI
-    fastcgi_buffer_size 16k;
-    fastcgi_buffers 16 16k;
-    fastcgi_busy_buffers_size 32k;
-    
-    # Gzip Compression
-    gzip on;
-    gzip_vary on;
-    gzip_proxied any;
-    gzip_comp_level 6;
-    gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
-    gzip_disable "msie6";
-    gzip_min_length 256;
-    
-    # DNS Resolver (Google DNS e Cloudflare)
-    resolver 8.8.8.8 8.8.4.4 1.1.1.1 valid=300s;
-    resolver_timeout 10s;
-    
-    # Proxy Headers Optimization
-    proxy_http_version 1.1;
-    proxy_set_header Connection "";
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Port $server_port;
-    
-    # Upstream Keepalive
-    upstream keepalive_upstream {
-        keepalive 32;
-        keepalive_requests 100;
-        keepalive_timeout 60s;
-    }
-    
-    # Cache para arquivos estáticos
-    proxy_cache_path /tmp/nginx-cache levels=1:2 keys_zone=static_cache:10m max_size=1g inactive=60m use_temp_path=off;
-    
-    # Limite de taxa (rate limiting)
-    limit_req_zone $binary_remote_addr zone=req_limit:10m rate=10r/s;
-    limit_req_status 429;
-    
-    # TCP Settings
-    tcp_nodelay on;
-    tcp_nopush on;
-    
-    # File handling
-    sendfile on;
-    sendfile_max_chunk 512k;
-    
-    # Hide version
-    server_tokens off;
-}
+keepalive_timeout 65s;
+keepalive_requests 100;
+
+# Buffers otimizados
+client_body_buffer_size 128k;
+client_max_body_size 256m;
+client_header_buffer_size 4k;
+large_client_header_buffers 4 16k;
+
+proxy_buffer_size 8k;
+proxy_buffers 16 8k;
+proxy_busy_buffers_size 16k;
+
+# FastCGI
+fastcgi_buffer_size 16k;
+fastcgi_buffers 16 16k;
+fastcgi_busy_buffers_size 32k;
+
+# Gzip Compression
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 6;
+gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
+gzip_disable "msie6";
+gzip_min_length 256;
+
+# DNS Resolver (Google DNS e Cloudflare)
+resolver 8.8.8.8 8.8.4.4 1.1.1.1 valid=300s;
+resolver_timeout 10s;
+
+# Proxy Headers Optimization
+proxy_http_version 1.1;
+proxy_set_header Connection "";
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+
+# TCP Settings
+tcp_nodelay on;
+tcp_nopush on;
+
+# File handling
+sendfile on;
+sendfile_max_chunk 512k;
+
+# Hide version
+server_tokens off;
 EOF
 
 echo -e "${GREEN}✓${NC} Arquivo de configuração criado"
@@ -156,7 +127,7 @@ echo -e "${GREEN}✓${NC} Arquivo de configuração criado"
 # Atualizar docker-compose.yml para incluir configuração customizada
 compose_file="$PROXY_MANAGER_DIR/docker-compose.yml"
 
-if grep -q "nginx-config/custom.conf" "$compose_file"; then
+if grep -q "nginx-custom/http.conf" "$compose_file"; then
     echo -e "${YELLOW}✓${NC} docker-compose.yml já contém configuração customizada"
 else
     echo -e "${YELLOW}→${NC} Atualizando docker-compose.yml..."
@@ -172,7 +143,7 @@ else
     in_app && /^    volumes:/ {in_volumes=1}
     in_app && in_volumes && /^      - app_letsencrypt/ && !added {
         print
-        print "      - ./nginx-config:/etc/nginx/conf.d/custom:ro"
+        print "      - ./nginx-custom:/data/nginx/custom:ro"
         added=1
         next
     }
@@ -203,7 +174,17 @@ echo -e "${GREEN}✓${NC} Arquivo de ambiente criado"
 echo ""
 echo -e "${YELLOW}→${NC} Reiniciando Nginx Proxy Manager..."
 cd "$PROXY_MANAGER_DIR"
-docker compose down
+
+docker compose down || true
+
+# Limpar containers antigos caso tenham ficado presos
+if docker ps -a --format '{{.Names}}' | grep -qx "nginx-proxy-manager"; then
+    docker rm -f nginx-proxy-manager >/dev/null 2>&1 || true
+fi
+if docker ps -a --format '{{.Names}}' | grep -qx "nginx-proxy-manager-db"; then
+    docker rm -f nginx-proxy-manager-db >/dev/null 2>&1 || true
+fi
+
 sleep 2
 docker compose up -d
 
@@ -240,8 +221,6 @@ echo -e "${BLUE}║ OTIMIZAÇÃO CONCLUÍDA                             ║${NC}
 echo -e "${BLUE}╚═══════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}Otimizações aplicadas:${NC}"
-echo "  • Worker processes: auto (baseado em CPUs)"
-echo "  • Worker connections: 4096"
 echo "  • Buffers otimizados para grandes uploads"
 echo "  • Timeouts: 300s (para streaming)"
 echo "  • Keepalive habilitado"

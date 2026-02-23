@@ -111,6 +111,7 @@ services:
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
       - ./html:/var/www/html
+      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     networks:
       - wp_network
 
@@ -119,6 +120,69 @@ networks:
     name: ${wp_network_name}
     driver: bridge
 EOF
+
+    # Criar configuração PHP otimizada
+    cat > "$domain_path/php-custom.ini" <<'PHP_EOF'
+; Configurações de Performance PHP
+memory_limit = 256M
+upload_max_filesize = 64M
+post_max_size = 64M
+max_execution_time = 300
+max_input_time = 300
+
+; OPcache
+opcache.enable = 1
+opcache.memory_consumption = 128
+opcache.interned_strings_buffer = 8
+opcache.max_accelerated_files = 10000
+opcache.revalidate_freq = 2
+opcache.fast_shutdown = 1
+
+; Realpath Cache
+realpath_cache_size = 4096K
+realpath_cache_ttl = 600
+PHP_EOF
+
+    # Criar .htaccess otimizado
+    mkdir -p "$domain_path/html"
+    cat > "$domain_path/html/.htaccess" <<'HTACCESS_EOF'
+# BEGIN WordPress Optimization
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresDefault "access plus 2 days"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\\.(ico|jpe?g|png|gif|webp|css|js|woff2?)$">
+        Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+</IfModule>
+
+FileETag None
+# END WordPress Optimization
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS_EOF
 
     (cd "$domain_path" && docker compose up -d)
 
