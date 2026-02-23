@@ -215,6 +215,47 @@ Este script:
 - 🔌 Conecta NPM à rede do WordPress
 - ✅ Valida conectividade interna
 
+### Diagnosticar Performance
+
+Se o site está lento para carregar:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash diagnose_performance.sh
+```
+
+Este script analisa:
+- 💻 Recursos do sistema (CPU, RAM, disco)
+- 🐳 Uso de recursos pelos containers Docker
+- ⚙️ Configurações PHP do WordPress (memória, OPcache)
+- 📊 Tamanho do banco de dados
+- ⏱️ Tempo de resposta HTTP
+- 🌐 Conectividade de rede
+- 💡 Recomendações de otimização
+
+### Otimizar WordPress
+
+Para aplicar otimizações de performance ao WordPress:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash optimize_wordpress.sh
+```
+
+Este script aplica:
+- 🚀 OPcache (cache de código PHP compilado)
+- 💾 Aumento de limites (memória: 256MB, upload: 64MB)
+- ⏱️ Timeouts estendidos (300s)
+- 🗜️ Compressão GZIP
+- 📦 Cache de navegador (imagens, CSS, JS)
+- ⚡ Realpath cache
+
+**Recomendações adicionais após otimização:**
+- Instale plugin de cache (WP Super Cache, W3 Total Cache)
+- Otimize imagens antes de fazer upload
+- Use CDN para conteúdo estático
+- Minimize número de plugins ativos
+
 ## Desinstalação
 
 > ⚠️ Atenção: o processo abaixo remove **AzuraCast, Nginx Proxy Manager e Docker** do servidor.
