@@ -23,6 +23,7 @@ Automação completa para instalar e gerenciar **AzuraCast** + **Nginx Proxy Man
 - [Documentação Completa](#-documentação)
 - [Solução de Problemas](#-solução-de-problemas)
 - [Gerenciamento de Firewall](#️-gerenciamento-de-firewall)
+- [Desinstalar](#️-desinstalar)
 
 ---
 
@@ -481,10 +482,26 @@ sudo bash scripts/manage_firewall.sh unblock
 ## 🗑️ Desinstalar
 
 ```bash
+# Simular sem remover nada (recomendado primeiro)
+sudo bash scripts/uninstall.sh --dry-run
+
+# Executar remoção completa com confirmação
 sudo bash scripts/uninstall.sh
+
+# Executar sem prompt interativo
+sudo bash scripts/uninstall.sh --yes
 ```
 
-Remove todos os containers, imagens, volumes, redes e arquivos de instalação.
+Remove o stack completo provisionado por este projeto:
+- AzuraCast + Nginx Proxy Manager
+- Roundcube + Filebrowser
+- Mailserver opcional (Postfix/Dovecot/PostfixAdmin)
+- Stacks WordPress criadas por `scripts/add_site.sh`
+- Regras de firewall aplicadas pelos scripts do projeto
+
+Observações:
+- A remoção Docker é focada nos recursos deste stack (não faz limpeza global de todos os containers/imagens do host).
+- Use `--dry-run` para revisar os comandos antes de executar em produção.
 
 ## ⚙️ Configuração Opcional
 
