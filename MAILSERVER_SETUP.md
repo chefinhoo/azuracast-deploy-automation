@@ -158,21 +158,31 @@ Acesse `http://SEU_IP:81` e crie Proxy Host:
 
 ## 🔐 Configurações Avançadas
 
-### DKIM (Assinatura Digital)
+### DKIM (Assinatura Digital) - ⚠️ REQUER CONFIGURAÇÃO MANUAL
 
+**IMPORTANTE:** O DKIM **NÃO é instalado automaticamente**. Para adicionar DKIM ao seu servidor:
+
+1. **Instalar OpenDKIM manualmente:**
 ```bash
-# Gerar chave DKIM
-cd /var/mailserver
-docker compose exec mailserver setup config dkim
+# No host (não no container)
+sudo apt-get install opendkim opendkim-tools
 
-# Ver chave pública
-cat /var/mailserver/config/opendkim/keys/exemplo.com.br/mail.txt
+# Gerar chave
+sudo mkdir -p /etc/opendkim/keys/exemplo.com.br
+sudo opendkim-genkey -D /etc/opendkim/keys/exemplo.com.br -d exemplo.com.br -s mail
 ```
 
-Adicione no DNS:
+2. **Ver a chave pública gerada:**
+```bash
+sudo cat /etc/opendkim/keys/exemplo.com.br/mail.txt
+```
+
+3. **Adicionar registro no DNS:**
 ```dns
-mail._domainkey.exemplo.com.br  TXT  "v=DKIM1; k=rsa; p=CHAVE_PUBLICA_AQUI"
+mail._domainkey.exemplo.com.br  TXT  "v=DKIM1; k=rsa; p=SUA_CHAVE_PUBLICA_GERADA"
 ```
+
+> 💡 **Nota:** O servidor de e-mail funciona sem DKIM, mas configurá-lo melhora a entregabilidade.
 
 ### DMARC (Política de E-mail)
 

@@ -193,22 +193,21 @@ telnet mail.exemplo.com.br 25
 
 ### E-mail cai no spam
 
-**Causa:** Falta DKIM e Reverse DNS
+**Causa:** Falta configuração DNS (SPF, Reverse DNS) ou IP em blacklist
 
 **Solução:**
 ```bash
-# 1. Configurar DKIM
-cd /var/mailserver
-docker compose exec mailserver setup config dkim
+# 1. Verificar se SPF está configurado (obrigatório):
+#    exemplo.com.br TXT "v=spf1 mx a ~all"
 
-# 2. Ver chave pública
-cat /var/mailserver/config/opendkim/keys/exemplo.com.br/mail.txt
-
-# 3. Adicionar no DNS:
-#    mail._domainkey.exemplo.com.br TXT "v=DKIM1; k=rsa; p=CHAVE_AQUI"
-
-# 4. Configurar PTR no painel do provedor
+# 2. Configurar PTR/Reverse DNS no painel do provedor (obrigatório):
 #    SEU_IP → mail.exemplo.com.br
+
+# 3. Verificar se IP não está em blacklist:
+#    https://mxtoolbox.com/blacklists.aspx
+
+# 4. Opcional - Configurar DKIM (melhora entregabilidade):
+#    Ver MAILSERVER_SETUP.md seção "DKIM - Configuração Manual"
 ```
 
 ### Roundcube não conecta
