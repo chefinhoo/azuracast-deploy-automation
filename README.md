@@ -199,6 +199,22 @@ Este script:
 - 🔄 Reinicia containers automaticamente
 - ✅ Verifica portas após reinício
 
+### Corrigir WordPress com Erro YAML
+
+Se o WordPress falhou na instalação com erro `yaml: line 4: mapping values are not allowed in this context`:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash fix_wordpress.sh
+```
+
+Este script:
+- 🔍 Detecta WordPress que falharam na instalação
+- 📝 Recria docker-compose.yml com indentação correta
+- 🔄 Reinicia stack WordPress
+- 🔌 Conecta NPM à rede do WordPress
+- ✅ Valida conectividade interna
+
 ## Desinstalação
 
 > ⚠️ Atenção: o processo abaixo remove **AzuraCast, Nginx Proxy Manager e Docker** do servidor.
