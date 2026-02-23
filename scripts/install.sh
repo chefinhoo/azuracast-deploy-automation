@@ -717,7 +717,7 @@ create_vhost() {
 services:
   wp-db:
     image: mariadb:10.11
-        container_name: ${wp_db_container_name}
+    container_name: ${wp_db_container_name}
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
@@ -726,12 +726,12 @@ services:
       MYSQL_PASSWORD: ${wp_db_password}
     volumes:
       - ./db_data:/var/lib/mysql
-        networks:
-            - wp_network
+    networks:
+      - wp_network
 
   wordpress:
     image: wordpress:php8.2-apache
-        container_name: ${wp_container_name}
+    container_name: ${wp_container_name}
     restart: unless-stopped
     depends_on:
       - wp-db
@@ -742,13 +742,13 @@ services:
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
       - ./html:/var/www/html
-        networks:
-            - wp_network
+    networks:
+      - wp_network
 
 networks:
-    wp_network:
-        name: ${wp_network_name}
-        driver: bridge
+  wp_network:
+    name: ${wp_network_name}
+    driver: bridge
 EOF
 
     log_info "Iniciando stack WordPress..."
@@ -838,10 +838,14 @@ display_summary() {
     echo "2. Criar Proxy Hosts para:"
     if [ -n "$domain" ]; then
         echo "   - $domain → http://wp-app-${domain//./-}:80"
-        echo "     (No NPM em Docker, não use localhost/IP público para WordPress)"
+        echo "     (Use o nome do container, não localhost/IP)"
+        echo ""
+        echo "   - azura.$domain → http://azuracast:$AZURACAST_HTTP_PORT"
+        echo "     (Use 'azuracast', não localhost/IP)"
+    else
+        echo "   - seudominio.com → http://azuracast:$AZURACAST_HTTP_PORT"
+        echo "     (Use 'azuracast', não localhost/IP)"
     fi
-    echo "   - azura.seudominio.com → http://azuracast:$AZURACAST_HTTP_PORT"
-    echo "     (No NPM em Docker, prefira 'azuracast' em vez de localhost/IP público)"
     echo "3. Gerar certificados SSL com Let's Encrypt"
     echo "4. Ativar 'Force SSL' nos Proxy Hosts"
     echo
