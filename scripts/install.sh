@@ -168,7 +168,6 @@ services:
     volumes:
       - app_data:/data
       - app_letsencrypt:/etc/letsencrypt
-      - ./nginx-custom:/data/nginx/custom:ro
     depends_on:
       - db
     networks:
@@ -227,75 +226,7 @@ networks:
 EOL
     
     # Criar configurações customizadas do Nginx para performance
-    log_info "Criando configurações otimizadas do Nginx..."
-    mkdir -p "${PROXY_MANAGER_DIR}/nginx-custom"
-    
-    cat > "${PROXY_MANAGER_DIR}/nginx-custom/http_top.conf" <<'NGINX_EOF'
-# Configurações de Performance NPM
-# Carregadas automaticamente no contexto http
-
-# Timeouts otimizados
-proxy_connect_timeout 300s;
-proxy_send_timeout 300s;
-proxy_read_timeout 300s;
-send_timeout 300s;
-
-client_header_timeout 60s;
-client_body_timeout 60s;
-
-keepalive_timeout 65s;
-keepalive_requests 100;
-
-# Buffers otimizados
-client_body_buffer_size 128k;
-client_max_body_size 512m;
-client_header_buffer_size 4k;
-large_client_header_buffers 4 16k;
-
-proxy_buffer_size 16k;
-proxy_buffers 32 16k;
-proxy_busy_buffers_size 64k;
-
-# FastCGI
-fastcgi_buffer_size 16k;
-fastcgi_buffers 16 16k;
-fastcgi_busy_buffers_size 32k;
-
-# Gzip Compression
-gzip on;
-gzip_vary on;
-gzip_proxied any;
-gzip_comp_level 6;
-gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
-gzip_disable "msie6";
-gzip_min_length 256;
-
-# DNS Resolver
-resolver 8.8.8.8 8.8.4.4 1.1.1.1 valid=300s;
-resolver_timeout 10s;
-
-# Proxy Headers
-proxy_http_version 1.1;
-proxy_set_header Connection "";
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_set_header X-Forwarded-Proto $scheme;
-
-# TCP Settings
-tcp_nodelay on;
-tcp_nopush on;
-
-# File handling
-sendfile on;
-sendfile_max_chunk 512k;
-
-# Hide version
-server_tokens off;
-NGINX_EOF
-
-    log_success "Configurações do Nginx criadas"
-    
-    log_info "Iniciando containers do Nginx Proxy Manager..."
+log_info "Iniciando containers do Nginx Proxy Manager..."
     cd "$PROXY_MANAGER_DIR" || { log_error "Falha ao acessar diretório"; return 1; }
     
     if ! docker compose up -d; then
