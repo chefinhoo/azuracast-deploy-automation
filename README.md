@@ -46,7 +46,9 @@ O script de remoção:
 
 - `8080` → HTTP AzuraCast
 - `8043` → HTTPS AzuraCast
-- `9000-9999` → streaming
+- `9000-9999` → streaming (gerenciadas dinamicamente pelo AzuraCast)
+
+> ℹ️ **Nota importante sobre portas:** O script remove portas hardcoded (8000-9999) do docker-compose.yml para permitir que o AzuraCast gerencie dinamicamente as portas das estações de rádio. Isso permite criar/remover estações livremente e reduz o uso de recursos. [Saiba mais](PORTS_EXPLAINED.md)
 
 ## Pré-requisitos
 
@@ -277,6 +279,14 @@ Este script aplica otimizações globais:
 - 💾 Cache de arquivos estáticos
 
 **⚠️ Importante:** Esta otimização afeta **todos** os sites que passam pelo proxy.
+
+## Documentação Adicional
+
+### Guias Específicos
+
+- **[PORTS_EXPLAINED.md](PORTS_EXPLAINED.md)** - Por que removemos portas hardcoded e como o AzuraCast gerencia portas dinamicamente
+- **[PERFORMANCE.md](PERFORMANCE.md)** - Guia completo de troubleshooting e otimização de performance
+- **[PROXY_SETUP.md](PROXY_SETUP.md)** - Configuração detalhada do Nginx Proxy Manager
 
 ## Desinstalação
 
