@@ -148,6 +148,44 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 if docker ps --format '{{.Names}}' | grep -q "^nginx-proxy-manager$"; then
     echo -e "${GREEN}✓ Container rodando${NC}"
     
+    # Verificar configuração Nginx
+    echo -e "\n${YELLOW}Configuração Nginx:${NC}"
+    if docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep -q "worker_processes"; then
+        workers=$(docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep "worker_processes" | head -1 | awk '{print $2}' | tr -d ';')
+        echo "  Worker processes: $workers"
+    else
+        echo "  Worker processes: padrão (1)"
+    fi
+    
+    if docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep -q "worker_connections"; then
+        connections=$(docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep "worker_connections" | head -1 | awk '{print $2}' | tr -d ';')
+        echo "  Worker connections: $connections"
+    else
+        echo "  Worker connections: padrão (768)"
+    fi
+    
+    # Verificar otimizações
+    echo -e "\n${YELLOW}Otimizações:${NC}"
+    if docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep -q "gzip on"; then
+        echo -e "  ${GREEN}✓${NC} Gzip habilitado"
+    else
+        echo -e "  ${RED}✗${NC} Gzip desabilitado"
+    fi
+    
+    if docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep -q "keepalive"; then
+        echo -e "  ${GREEN}✓${NC} Keepalive habilitado"
+    else
+        echo -e "  ${YELLOW}!${NC} Keepalive padrão"
+    fi
+    
+    # Verificar timeouts
+    if docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep -q "proxy_read_timeout"; then
+        timeout=$(docker exec nginx-proxy-manager nginx -T 2>/dev/null | grep "proxy_read_timeout" | head -1 | awk '{print $2}' | tr -d ';')
+        echo "  Proxy read timeout: $timeout"
+    else
+        echo "  Proxy read timeout: padrão (60s)"
+    fi
+    
     # Verificar erros nos logs
     echo -e "\n${YELLOW}Últimos erros nos logs (se houver):${NC}"
     docker logs nginx-proxy-manager 2>&1 | grep -i "error\|warning" | tail -5 || echo "  Nenhum erro recente"
@@ -190,6 +228,9 @@ if [ "$disk_usage" -gt 80 ]; then
     echo "  • Verifique backups desnecessários"
 fi
 
+echo ""
+echo -e "${GREEN}Para otimizar Nginx Proxy Manager:${NC}"
+echo "  sudo bash optimize_npm.sh"
 echo ""
 echo -e "${GREEN}Para otimizar WordPress:${NC}"
 echo "  sudo bash optimize_wordpress.sh"

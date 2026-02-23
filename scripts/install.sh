@@ -167,6 +167,11 @@ services:
       DB_MYSQL_PASSWORD: "npm"
       DB_MYSQL_NAME: "npm"
       DISABLE_IPV6: "true"
+      # Otimizações
+      PHP_MEMORY_LIMIT: "256M"
+      PHP_MAX_EXECUTION_TIME: "300"
+      # Nginx worker processes (auto = número de CPUs)
+      NGINX_WORKER_PROCESSES: "auto"
     volumes:
       - app_data:/data
       - app_letsencrypt:/etc/letsencrypt
@@ -174,6 +179,12 @@ services:
       - db
     networks:
       - npm_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:81/"]
       interval: 30s
@@ -195,6 +206,16 @@ services:
       - db_data:/var/lib/mysql
     networks:
       - npm_network
+    command: 
+      - --max_connections=200
+      - --innodb_buffer_pool_size=256M
+      - --innodb_log_file_size=64M
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s

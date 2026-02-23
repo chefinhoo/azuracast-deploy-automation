@@ -256,6 +256,28 @@ Este script aplica:
 - Use CDN para conteúdo estático
 - Minimize número de plugins ativos
 
+### Otimizar Nginx Proxy Manager
+
+Se **todos os sites** (WordPress e AzuraCast) estão lentos, o problema pode estar no NPM:
+
+```bash
+cd azuracast-deploy-automation
+sudo bash optimize_npm.sh
+```
+
+Este script aplica otimizações globais:
+- ⚡ Worker processes otimizados (auto-detecta CPUs)
+- 🔗 Worker connections aumentadas (768 → 4096)
+- 📦 Buffers otimizados para grandes uploads
+- ⏱️ Timeouts estendidos (60s → 300s)
+- 🔄 Keepalive connections habilitado
+- 🌐 DNS resolver rápido (Google, Cloudflare)
+- 🗜️ Gzip compression ativado
+- 📤 Upload máximo: 256MB
+- 💾 Cache de arquivos estáticos
+
+**⚠️ Importante:** Esta otimização afeta **todos** os sites que passam pelo proxy.
+
 ## Desinstalação
 
 > ⚠️ Atenção: o processo abaixo remove **AzuraCast, Nginx Proxy Manager e Docker** do servidor.
