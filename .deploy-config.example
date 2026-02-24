@@ -19,9 +19,11 @@ PROXY_MANAGER_DIR="/var/proxy_manager"
 # Directory for AzuraCast
 AZURACAST_DIR="/var/azuracast"
 
-# Raiz para sites WordPress
-# Root directory for WordPress sites
-WEB_ROOT="/var/www"
+# Raiz para sites (WordPress e estáticos)
+# Root directory for sites (WordPress and static)
+# Nova estrutura: /var/nome-cliente/html (principal) ou /var/nome-cliente/subdominio
+# New structure: /var/client-name/html (main) or /var/client-name/subdomain
+WEB_ROOT="/var"
 
 # ==========================================================
 # PORTAS - NGINX PROXY MANAGER

@@ -130,8 +130,9 @@ if [ ! -z "$stopped_containers" ]; then
     fi
     
     if echo "$stopped_containers" | grep -q "wp-app"; then
-        echo "# WordPress (exemplo.com.br):"
-        echo "cd /var/www/exemplo.com.br && docker compose up -d"
+        echo "# WordPress (exemplo de cliente):"        echo "cd /var/nome-cliente/html && docker compose up -d"
+        echo "# ou para subdomínio:"
+        echo "cd /var/nome-cliente/subdominio && docker compose up -d"
         echo ""
     fi
 fi
@@ -154,7 +155,8 @@ echo "🔨 SOLUÇÃO 3: Reiniciar todos os serviços"
 echo "──────────────────────────────────────────────────────"
 echo "cd /var/filemanager && docker compose restart"
 echo "cd /var/webmail && docker compose restart"
-echo "cd /var/www/exemplo.com.br && docker compose restart"
+echo "cd /var/nome-cliente/html && docker compose restart  # Site principal"
+echo "cd /var/nome-cliente/subdominio && docker compose restart  # Subdomínio"
 echo ""
 
 echo "🔨 SOLUÇÃO 4: Verificar configuração do proxy no NPM"
@@ -176,8 +178,11 @@ echo ""
 echo "# Webmail:"
 echo "cd /var/webmail && docker compose down && docker compose up -d"
 echo ""
-echo "# WordPress:"
-echo "cd /var/www/exemplo.com.br && docker compose down && docker compose up -d"
+echo "# WordPress (site principal):"
+echo "cd /var/nome-cliente/html && docker compose down && docker compose up -d"
+echo ""
+echo "# WordPress (subdomínio):"
+echo "cd /var/nome-cliente/subdominio && docker compose down && docker compose up -d"
 echo ""
 
 echo "═══════════════════════════════════════════════════════"

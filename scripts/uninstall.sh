@@ -177,7 +177,7 @@ if command -v docker >/dev/null 2>&1; then
     while IFS= read -r wp_creds; do
         wp_dir="$(dirname "$wp_creds")"
         run_compose_down "$wp_dir"
-    done < <(find /var/www -maxdepth 2 -type f -name wordpress-credentials.txt 2>/dev/null || true)
+    done < <(find /var -maxdepth 3 -type f -name wordpress-credentials.txt 2>/dev/null || true)
 
     echo "[INFO] Removendo containers do stack... / Removing stack containers..."
     mapfile -t containers < <(
@@ -248,7 +248,7 @@ echo "[INFO] Removendo sites WordPress criados por este instalador... / Removing
 while IFS= read -r wp_creds; do
     wp_dir="$(dirname "$wp_creds")"
     run_cmd rm -rf "$wp_dir"
-done < <(find /var/www -maxdepth 2 -type f -name wordpress-credentials.txt 2>/dev/null || true)
+done < <(find /var -maxdepth 3 -type f -name wordpress-credentials.txt 2>/dev/null || true)
 
 run_cmd rm -rf ~/azuracast-deploy-automation
 run_cmd rm -rf ~/.docker

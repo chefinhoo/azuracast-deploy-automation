@@ -48,8 +48,14 @@ connect_npm_to_network() {
 
 provision_wordpress() {
     local domain="$1"
+    local client_name="$2"
+    local subdirectory_name="$3"
+    
     local slug="${domain//./-}"
-    local domain_path="$WEB_ROOT/$domain"
+    local domain_path="$WEB_ROOT/$client_name/$subdirectory_name"
+    
+    log_info "Caminho do site: $domain_path"
+    
     local wp_container_name="wp-app-${slug}"
     local wp_db_container_name="wp-db-${slug}"
     local wp_network_name="wp-${slug}-network"
@@ -61,7 +67,9 @@ provision_wordpress() {
     local wp_db_root_password=""
 
     log_info "Provisionando WordPress para $domain"
-    mkdir -p "$domain_path/html" "$domain_path/db_data"
+    
+    # Criar estrutura de diretórios
+    mkdir -p "$domain_path" "$domain_path/db_data"
 
     if [ -f "$creds_file" ]; then
         log_info "Credenciais existentes encontradas. Reutilizando..."
@@ -81,6 +89,9 @@ provision_wordpress() {
     if [ -z "$wp_db_root_password" ]; then
         wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
     fi
+
+    # Volume path sempre aponta para o diretório atual
+    local volume_path="./:/var/www/html"
 
     cat > "$domain_path/docker-compose.yml" <<EOF
 services:
@@ -110,7 +121,7 @@ services:
       WORDPRESS_DB_USER: ${wp_db_user}
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
-      - ./html:/var/www/html
+      - ${volume_path}
       - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     networks:
       - wp_network
@@ -143,9 +154,10 @@ realpath_cache_size = 4096K
 realpath_cache_ttl = 600
 PHP_EOF
 
-    # Criar .htaccess otimizado
-    mkdir -p "$domain_path/html"
-    cat > "$domain_path/html/.htaccess" <<'HTACCESS_EOF'
+    # Criar .htaccess otimizado no diretório raiz
+    local htaccess_path="$domain_path/.htaccess"
+    
+    cat > "$htaccess_path" <<'HTACCESS_EOF'
 # BEGIN WordPress Optimization
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml
@@ -187,6 +199,8 @@ HTACCESS_EOF
     (cd "$domain_path" && docker compose up -d)
 
     cat > "$creds_file" <<EOF
+CLIENT_NAME=${client_name}
+SUBDIRECTORY_NAME=${subdirectory_name}
 DOMAIN=${domain}
 WORDPRESS_URL=http://${domain}
 WORDPRESS_CONTAINER=${wp_container_name}
@@ -215,16 +229,25 @@ EOF
 
 provision_static_site() {
     local domain="$1"
+    local client_name="$2"
+    local subdirectory_name="$3"
+    
     local slug="${domain//./-}"
-    local domain_path="$WEB_ROOT/$domain"
+    local domain_path="$WEB_ROOT/$client_name/$subdirectory_name"
+    
+    log_info "Caminho do site: $domain_path"
+    
     local static_container_name="site-app-${slug}"
     local static_network_name="site-${slug}-network"
 
     log_info "Provisionando site estático para $domain"
-    mkdir -p "$domain_path/html"
+    
+    mkdir -p "$domain_path"
 
-    if [ ! -f "$domain_path/html/index.html" ]; then
-        cat > "$domain_path/html/index.html" <<EOF
+    local index_path="$domain_path/index.html"
+    
+    if [ ! -f "$index_path" ]; then
+        cat > "$index_path" <<EOF
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -240,6 +263,9 @@ provision_static_site() {
 EOF
     fi
 
+    # Volume path sempre aponta para o diretório atual
+    local volume_path="./:/usr/share/nginx/html:ro"
+
     cat > "$domain_path/docker-compose.yml" <<EOF
 services:
   static:
@@ -247,7 +273,7 @@ services:
     container_name: ${static_container_name}
     restart: unless-stopped
     volumes:
-      - ./html:/usr/share/nginx/html:ro
+      - ${volume_path}
     networks:
       - static_network
 
@@ -281,13 +307,30 @@ main() {
     check_root || exit 1
     check_distribution || exit 1
 
-    print_section "ADICIONAR NOVO DOMÍNIO"
+    print_section "ADICIONAR NOVO SITE"
 
+    # 1. Solicitar ou selecionar cliente
+    local client_name
+    client_name="$(prompt_client_name)"
+    
+    # 2. Solicitar nome do subdiretório
+    local subdirectory_name
+    subdirectory_name="$(prompt_subdirectory_name "$client_name")"
+    
+    # 3. Solicitar domínio
     local domain
     domain="$(prompt_domain)"
-
+    
+    # Confirmar estrutura
     echo ""
-    echo "Escolha o modelo do site para $domain:"
+    log_info "Estrutura configurada:"
+    echo "  Cliente: $client_name"
+    echo "  Subdiretório: $subdirectory_name"
+    echo "  Domínio: $domain"
+    echo "  Caminho completo: $WEB_ROOT/$client_name/$subdirectory_name"
+    echo ""
+
+    echo "Escolha o modelo do site:"
     echo "  1) WordPress"
     echo "  2) Site estático"
 
@@ -296,11 +339,11 @@ main() {
         read -rp "Opção [1-2]: " option
         case "$option" in
             1)
-                provision_wordpress "$domain"
+                provision_wordpress "$domain" "$client_name" "$subdirectory_name"
                 break
                 ;;
             2)
-                provision_static_site "$domain"
+                provision_static_site "$domain" "$client_name" "$subdirectory_name"
                 break
                 ;;
             *)

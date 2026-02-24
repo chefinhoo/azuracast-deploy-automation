@@ -730,14 +730,15 @@ apply_azuracast_network_hardening() {
 }
 
 # ==========================================================
-# WORDPRESS
+# WORDPRESS - PREPARAR AMBIENTE
 # ==========================================================
 setup_static_site() {
-    log_info "Preparando ambiente WordPress..."
+    log_info "Preparando ambiente para sites..."
 
-    mkdir -p "$WEB_ROOT" || { log_error "Falha ao criar diretório"; return 1; }
+    # O diretório /var já existe no sistema
+    # Sites serão criados em /var/cliente/subdiretorio quando adicionados
     
-    log_success "Ambiente WordPress preparado."
+    log_success "Ambiente preparado. Sites serão criados em: $WEB_ROOT/<cliente>/<subdiretorio>"
     return 0
 }
 
@@ -923,8 +924,7 @@ services:
       - ./root:/srv
       - ./filebrowser.db:/database.db
       - ./settings.json:/etc/config/settings.json
-      - /var/www:/var/www:rw
-      - /var/azuracast:/var/azuracast:rw
+      - /var:/var:rw
     networks:
       - filemanager_network
 
@@ -1268,16 +1268,38 @@ EOF
 create_vhost() {
     print_section "CONFIGURAÇÃO DE WORDPRESS"
     
+    # 1. Solicitar ou selecionar cliente
+    local client_name
+    client_name="$(prompt_client_name)"
+    
+    # 2. Solicitar nome do subdiretório
+    local subdirectory_name
+    subdirectory_name="$(prompt_subdirectory_name "$client_name")"
+    
+    # 3. Solicitar domínio
     local domain
     domain="$(prompt_domain)"
+    
+    # Confirmar estrutura
+    echo ""
+    log_info "Estrutura configurada:"
+    echo "  Cliente: $client_name"
+    echo "  Subdiretório: $subdirectory_name"
+    echo "  Domínio: $domain"
+    echo "  Caminho completo: $WEB_ROOT/$client_name/$subdirectory_name"
+    echo ""
+    
     local domain_slug="${domain//./-}"
     local wp_container_name="wp-app-${domain_slug}"
     local wp_db_container_name="wp-db-${domain_slug}"
     local wp_network_name="wp-${domain_slug}-network"
     
-    local domain_path="$WEB_ROOT/$domain"
+    local domain_path="$WEB_ROOT/$client_name/$subdirectory_name"
+    
     log_info "Criando estrutura em $domain_path"
-    mkdir -p "$domain_path/html" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    # Criar estrutura de diretórios
+    mkdir -p "$domain_path" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
 
     local creds_file
     creds_file="$domain_path/wordpress-credentials.txt"
@@ -1314,6 +1336,9 @@ create_vhost() {
         wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
     fi
 
+    # Volume path sempre aponta para o diretório atual
+    local volume_path="./:/var/www/html"
+
     local wp_compose_file="$domain_path/docker-compose.yml"
     cat > "$wp_compose_file" <<EOF || { log_error "Falha ao criar docker-compose do WordPress"; return 1; }
 services:
@@ -1343,7 +1368,7 @@ services:
       WORDPRESS_DB_USER: ${wp_db_user}
       WORDPRESS_DB_PASSWORD: ${wp_db_password}
     volumes:
-      - ./html:/var/www/html
+      - ${volume_path}
       - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     networks:
       - wp_network
@@ -1377,9 +1402,12 @@ realpath_cache_size = 4096K
 realpath_cache_ttl = 600
 PHP_EOF
 
-    # Criar .htaccess otimizado
+    # Criar .htaccess otimizado no diretório raiz
     log_info "Criando .htaccess otimizado..."
-    cat > "$domain_path/html/.htaccess" <<'HTACCESS_EOF'
+    
+    local htaccess_path="$domain_path/.htaccess"
+    
+    cat > "$htaccess_path" <<'HTACCESS_EOF'
 # BEGIN WordPress Optimization
 
 # Compressão GZIP
@@ -1461,6 +1489,8 @@ HTACCESS_EOF
     fi
 
     cat > "$creds_file" <<EOF || { log_error "Falha ao salvar credenciais do WordPress"; return 1; }
+CLIENT_NAME=${client_name}
+SUBDIRECTORY_NAME=${subdirectory_name}
 DOMAIN=${domain}
 WORDPRESS_URL=http://${domain}
 WORDPRESS_CONTAINER=${wp_container_name}
@@ -1477,7 +1507,13 @@ EOF
     chmod 600 "$creds_file" || true
 
     log_success "WordPress '$domain' configurado com sucesso."
-    echo "$domain" > /tmp/deployed_domain
+    
+    # Salvar informações para display_summary
+    cat > /tmp/deployed_domain <<TMPEOF
+${domain}
+${client_name}
+${subdirectory_name}
+TMPEOF
     return 0
 }
 
@@ -1486,7 +1522,14 @@ EOF
 # ==========================================================
 display_summary() {
     local domain=""
-    [ -f /tmp/deployed_domain ] && domain=$(cat /tmp/deployed_domain)
+    local client_name=""
+    local subdirectory_name=""
+    
+    if [ -f /tmp/deployed_domain ]; then
+        domain=$(sed -n '1p' /tmp/deployed_domain 2>/dev/null || echo "")
+        client_name=$(sed -n '2p' /tmp/deployed_domain 2>/dev/null || echo "")
+        subdirectory_name=$(sed -n '3p' /tmp/deployed_domain 2>/dev/null || echo "")
+    fi
     
     local public_ip
     public_ip="$(get_public_ip)"
@@ -1495,8 +1538,10 @@ display_summary() {
     
     if [ -n "$domain" ]; then
         echo "📝 WordPress: $domain"
-        echo "   Diretório: $WEB_ROOT/$domain"
-        echo "   Credenciais DB: $WEB_ROOT/$domain/wordpress-credentials.txt"
+        echo "   Cliente: $client_name"
+        echo "   Subdiretório: $subdirectory_name"
+        echo "   Diretório: $WEB_ROOT/$client_name/$subdirectory_name"
+        echo "   Credenciais DB: $WEB_ROOT/$client_name/$subdirectory_name/wordpress-credentials.txt"
         echo "   Proxy interno: wp-app-${domain//./-}:80 (sem porta pública)"
         echo
     fi
@@ -1599,18 +1644,18 @@ display_summary() {
     echo "   ✓ I Agree to the Let's Encrypt Terms of Service"
     echo ""
     echo "4. Criar Usuários no Filebrowser:"
-    if [ -n "$domain" ]; then
+    if [ -n "$domain" ] && [ -n "$client_name" ]; then
         echo "   Via CLI (recomendado):"
         echo "   $ docker exec filemanager filebrowser users add cliente1 \\"
         echo "     --password=\"SenhaForte123!\" \\"
-        echo "     --scope=\"/var/www/$domain\" \\"
+        echo "     --scope=\"/var/$client_name\" \\"
         echo "     --perm.download --perm.upload --perm.create --perm.modify"
         echo ""
         echo "   Via Web: https://files.$domain"
     else
         echo "   $ docker exec filemanager filebrowser users add cliente1 \\"
         echo "     --password=\"SenhaForte123!\" \\"
-        echo "     --scope=\"/var/www/seusite.com.br\" \\"
+        echo "     --scope=\"/var/nome-cliente\" \\"
         echo "     --perm.download --perm.upload --perm.create --perm.modify"
         echo ""
     fi

@@ -112,7 +112,7 @@ load_config() {
     # Usar valores padrão primeiro
     PROXY_MANAGER_DIR="${PROXY_MANAGER_DIR:=/var/proxy_manager}"
     AZURACAST_DIR="${AZURACAST_DIR:=/var/azuracast}"
-    WEB_ROOT="${WEB_ROOT:=/var/www}"
+    WEB_ROOT="${WEB_ROOT:=/var}"
     
     NPM_ADMIN_PORT="${NPM_ADMIN_PORT:=81}"
     NPM_HTTP_PORT="${NPM_HTTP_PORT:=80}"
@@ -512,6 +512,148 @@ prompt_domain() {
     
     # Retornar APENAS o domínio (sem newline) para evitar contaminar variáveis
     printf "%s" "$domain"
+}
+
+# Listar clientes existentes em /var/
+list_existing_clients() {
+    local clients=()
+    local excluded_dirs="filemanager|webmail|azuracast|proxy_manager|mailserver|log|tmp|lib|cache|run|opt|snap|spool|mail|backups|lock|local|vmail"
+    
+    # Buscar diretórios em /var/ que não sejam de sistema
+    for dir in /var/*/; do
+        [ -d "$dir" ] || continue
+        local dirname=$(basename "$dir")
+        
+        # Pular diretórios de sistema
+        if [[ "$dirname" =~ ^($excluded_dirs)$ ]]; then
+            continue
+        fi
+        
+        clients+=("$dirname")
+    done
+    
+    printf '%s\n' "${clients[@]}"
+}
+
+# Solicitar nome do cliente (novo ou existente)
+prompt_client_name() {
+    local client_name=""
+    local existing_clients=()
+    
+    # Listar clientes existentes
+    mapfile -t existing_clients < <(list_existing_clients)
+    
+    echo ""
+    if [ ${#existing_clients[@]} -gt 0 ]; then
+        echo "Clientes existentes encontrados:"
+        for i in "${!existing_clients[@]}"; do
+            echo "  $((i+1))) ${existing_clients[i]}"
+        done
+        echo ""
+        echo "Deseja:"
+        echo "  n) Criar um NOVO cliente"
+        echo "  1-${#existing_clients[@]}) Usar cliente existente"
+        echo ""
+        
+        local choice=""
+        read -rp "Escolha [n/1-${#existing_clients[@]}]: " choice
+        
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#existing_clients[@]}" ]; then
+            client_name="${existing_clients[$((choice-1))]}"
+            log_success "Cliente selecionado: $client_name" >&2
+            printf "%s" "$client_name"
+            return 0
+        fi
+    fi
+    
+    # Criar novo cliente
+    echo ""
+    echo "Criando novo cliente..."
+    while [ -z "$client_name" ]; do
+        read -rp "👉 Informe o nome do cliente (ex: empresa-xyz): " client_name
+        
+        if [ -z "$client_name" ]; then
+            log_error "Nome do cliente não pode estar vazio." >&2
+            continue
+        fi
+        
+        # Validar caracteres permitidos (alfanumérico, hífen, underscore)
+        if [[ ! "$client_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            log_error "Nome inválido. Use apenas letras, números, hífen e underscore." >&2
+            client_name=""
+            continue
+        fi
+        
+        # Verificar se já existe
+        if [ -d "/var/$client_name" ]; then
+            log_error "Cliente '$client_name' já existe. Use a opção de selecionar existente." >&2
+            client_name=""
+            continue
+        fi
+        
+        log_success "Nome do cliente validado: $client_name" >&2
+    done
+    
+    printf "%s" "$client_name"
+}
+
+# Solicitar nome do subdiretório (html para principal, ou nome personalizado)
+prompt_subdirectory_name() {
+    local client_name="$1"
+    local subdirectory_name=""
+    
+    echo ""
+    echo "Subdiretórios existentes para cliente '$client_name':"
+    
+    # Listar subdiretórios existentes
+    if [ -d "/var/$client_name" ]; then
+        local count=0
+        for subdir in /var/$client_name/*/; do
+            if [ -d "$subdir" ]; then
+                local dirname=$(basename "$subdir")
+                echo "  - $dirname"
+                count=$((count + 1))
+            fi
+        done
+        
+        if [ $count -eq 0 ]; then
+            echo "  (nenhum)"
+        fi
+    else
+        echo "  (cliente novo - nenhum subdiretório)"
+    fi
+    
+    echo ""
+    echo "ℹ️  Use 'html' para o site principal"
+    echo "ℹ️  Ou informe um nome para subdomínio (ex: blog, loja, app, painel)"
+    echo ""
+    
+    while [ -z "$subdirectory_name" ]; do
+        read -rp "👉 Nome do subdiretório: " subdirectory_name
+        
+        if [ -z "$subdirectory_name" ]; then
+            log_error "Nome do subdiretório não pode estar vazio." >&2
+            continue
+        fi
+        
+        # Validar caracteres permitidos
+        if [[ ! "$subdirectory_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            log_error "Nome inválido. Use apenas letras, números, hífen e underscore." >&2
+            subdirectory_name=""
+            continue
+        fi
+        
+        # Verificar se já existe
+        if [ -d "/var/$client_name/$subdirectory_name" ]; then
+            log_error "Subdiretório '$subdirectory_name' já existe para este cliente." >&2
+            subdirectory_name=""
+            continue
+        fi
+        
+        log_success "Subdiretório validado: $subdirectory_name" >&2
+    done
+    
+    printf "%s" "$subdirectory_name"
 }
 
 # Solicitar entrada com validação

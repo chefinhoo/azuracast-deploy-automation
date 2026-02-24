@@ -103,13 +103,31 @@ echo ""
 start_service "/var/filemanager" "Filemanager"
 start_service "/var/webmail" "Webmail (Roundcube)"
 
-# Iniciar WordPress sites
-if [ -d "/var/www" ]; then
-    for site_dir in /var/www/*/; do
-        if [ -f "${site_dir}docker-compose.yml" ]; then
-            site_name=$(basename "$site_dir")
-            start_service "$site_dir" "WordPress - $site_name"
+# Iniciar WordPress sites (nova estrutura: /var/cliente/html ou /var/cliente/subdominio)
+if [ -d "/var" ]; then
+    # Primeiro nível: clientes
+    for client_dir in /var/*/; do
+        client_name=$(basename "$client_dir")
+        
+        # Pular diretórios de sistema
+        if [[ "$client_name" =~ ^(filemanager|webmail|azuracast|proxy_manager|mailserver|log|tmp|lib|cache|run|opt|snap)$ ]]; then
+            continue
         fi
+        
+        # Verificar se é um site principal (html/)
+        if [ -f "${client_dir}html/docker-compose.yml" ]; then
+            start_service "${client_dir}html" "WordPress - $client_name (Principal)"
+        fi
+        
+        # Verificar subdomínios
+        for subdir in "${client_dir}"*/; do
+            if [ -d "$subdir" ] && [ -f "${subdir}docker-compose.yml" ]; then
+                subdir_name=$(basename "$subdir")
+                if [ "$subdir_name" != "html" ]; then
+                    start_service "$subdir" "WordPress - $client_name/$subdir_name"
+                fi
+            fi
+        done
     done
 fi
 
