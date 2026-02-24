@@ -816,6 +816,7 @@ services:
       - webmail
     networks:
       - webmail_network
+      - npm_network
 
 volumes:
   webmail_data:
@@ -824,6 +825,9 @@ volumes:
 networks:
   webmail_network:
     driver: bridge
+  npm_network:
+    external: true
+    name: proxy_manager_npm_network
 EOL
 
     # Configuração NGINX para Roundcube
@@ -927,6 +931,7 @@ services:
       - /var:/var:rw
     networks:
       - filemanager_network
+      - npm_network
 
 volumes:
   filebrowser_data:
@@ -934,6 +939,9 @@ volumes:
 networks:
   filemanager_network:
     driver: bridge
+  npm_network:
+    external: true
+    name: proxy_manager_npm_network
 EOL
 
     # Configuração do Filebrowser
