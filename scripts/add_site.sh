@@ -381,6 +381,25 @@ main() {
     echo "  Forward Hostname/IP: ${PROXY_FORWARD_HOST}"
     echo "  Forward Port: ${PROXY_FORWARD_PORT}"
     echo ""
+
+    local filebrowser_creds_file="/var/${client_name}/.filebrowser-credentials.txt"
+    if [ -f "$filebrowser_creds_file" ]; then
+        local fb_user=""
+        local fb_pass=""
+        fb_user="$(grep -E '^Usuário:' "$filebrowser_creds_file" | head -1 | cut -d: -f2- | xargs || true)"
+        fb_pass="$(grep -E '^Senha:' "$filebrowser_creds_file" | head -1 | cut -d: -f2- | xargs || true)"
+
+        print_section "CREDENCIAIS FILEBROWSER"
+        echo "  Usuário: ${fb_user:-$client_name}"
+        if [ -n "$fb_pass" ]; then
+            echo "  Senha: $fb_pass"
+        else
+            echo "  Senha: (não encontrada no arquivo)"
+        fi
+        echo "  Arquivo: $filebrowser_creds_file"
+        echo ""
+    fi
+
     log_info "Depois, finalize SSL no Nginx Proxy Manager (Let's Encrypt + Force SSL)."
 }
 
