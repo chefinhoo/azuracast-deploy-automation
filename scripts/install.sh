@@ -1016,6 +1016,18 @@ setup_filemanager() {
     
     local filemanager_dir="/var/filemanager"
     mkdir -p "$filemanager_dir/root" || { log_error "Falha ao criar diretório"; return 1; }
+
+    # Garantir que filebrowser.db seja arquivo (evita mount como diretório em /database.db)
+    if [ -d "$filemanager_dir/filebrowser.db" ]; then
+        log_warn "Encontrado diretório em $filemanager_dir/filebrowser.db. Corrigindo para arquivo..."
+        local fb_db_backup="${filemanager_dir}/filebrowser.db.backup-$(date +%Y%m%d-%H%M%S)"
+        mv "$filemanager_dir/filebrowser.db" "$fb_db_backup" || {
+            log_error "Falha ao corrigir filebrowser.db (diretório)."
+            return 1
+        }
+        log_warn "Backup criado em: $fb_db_backup"
+    fi
+    touch "$filemanager_dir/filebrowser.db" || { log_error "Falha ao criar arquivo filebrowser.db"; return 1; }
     
     cd "$filemanager_dir" || { log_error "Falha ao acessar diretório"; return 1; }
     

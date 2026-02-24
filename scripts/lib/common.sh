@@ -521,6 +521,12 @@ manage_filebrowser_user() {
     local fb_db_path="/database.db"
     local fb_config_path="/etc/config/settings.json"
 
+    # Detectar caminho real do banco dentro do container
+    if docker exec filemanager test -d /database.db 2>/dev/null; then
+        fb_db_path="/database.db/filebrowser.db"
+        docker exec filemanager sh -lc 'touch /database.db/filebrowser.db' >/dev/null 2>&1 || true
+    fi
+
     filebrowser_cmd() {
         docker exec filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
     }
