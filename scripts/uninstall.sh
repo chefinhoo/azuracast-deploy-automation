@@ -100,6 +100,54 @@ run_compose_down() {
     fi
 }
 
+remove_filebrowser_users() {
+    echo "[INFO] Removendo usuários do Filebrowser... / Removing Filebrowser users..."
+    
+    # Verificar se o container filemanager está rodando
+    if ! docker ps --format '{{.Names}}' | grep -q "^filemanager$" 2>/dev/null; then
+        echo "[INFO] Container filemanager não está rodando. Pulando remoção de usuários. / Filemanager container is not running. Skipping user removal."
+        return 0
+    fi
+    
+    # Listar todos os clientes com credenciais do Filebrowser
+    local client_dirs=()
+    local excluded_dirs="filemanager|webmail|azuracast|proxy_manager|mailserver|log|tmp|lib|cache|run|opt|snap|spool|mail|backups|lock|local|vmail"
+    
+    for client_creds in /var/*/.filebrowser-credentials.txt; do
+        [ -f "$client_creds" ] || continue
+        
+        local client_dir=$(dirname "$client_creds")
+        local client_name=$(basename "$client_dir")
+        
+        # Pular diretórios de sistema
+        if [[ "$client_name" =~ ^($excluded_dirs)$ ]]; then
+            continue
+        fi
+        
+        client_dirs+=("$client_name")
+        
+        # Extrair usuário do arquivo de credenciais
+        local username
+        username=$(grep "^Usuário:" "$client_creds" 2>/dev/null | cut -d: -f2- | xargs || echo "$client_name")
+        
+        if [ -n "$username" ]; then
+            if [ "$DRY_RUN" -eq 1 ]; then
+                echo "[DRY-RUN] docker exec filemanager filebrowser users rm $username"
+            else
+                echo "[INFO] Removendo usuário Filebrowser: $username / Removing Filebrowser user: $username"
+                docker exec filemanager filebrowser users rm "$username" 2>/dev/null || \
+                    echo "[WARN] Não foi possível remover usuário $username (pode não existir) / Could not remove user $username (may not exist)"
+            fi
+        fi
+    done
+    
+    if [ ${#client_dirs[@]} -eq 0 ]; then
+        echo "[INFO] Nenhum usuário do Filebrowser encontrado. / No Filebrowser users found."
+    else
+        echo "[INFO] Processados ${#client_dirs[@]} usuário(s) do Filebrowser. / Processed ${#client_dirs[@]} Filebrowser user(s)."
+    fi
+}
+
 remove_firewall_rules() {
     local ports=("8080" "8043" "2022" "9000:9999")
     local chains=("INPUT" "DOCKER-USER")
@@ -170,6 +218,10 @@ if command -v docker >/dev/null 2>&1; then
     run_compose_down /var/proxy_manager
     run_compose_down /var/azuracast
     run_compose_down /var/webmail
+    
+    # Remover usuários do Filebrowser antes de derrubar o container
+    remove_filebrowser_users
+    
     run_compose_down /var/filemanager
     run_compose_down /var/mailserver
 
@@ -247,8 +299,24 @@ run_cmd rm -f /tmp/deployed_domain
 echo "[INFO] Removendo sites WordPress criados por este instalador... / Removing WordPress sites created by this installer..."
 while IFS= read -r wp_creds; do
     wp_dir="$(dirname "$wp_creds")"
+    
+    # Remover arquivo de credenciais do Filebrowser se existir
+    local client_dir=$(dirname "$wp_dir")
+    if [ -f "$client_dir/.filebrowser-credentials.txt" ]; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+            echo "[DRY-RUN] rm -f $client_dir/.filebrowser-credentials.txt"
+        else
+            echo "[INFO] Removendo credenciais Filebrowser: $client_dir/.filebrowser-credentials.txt / Removing Filebrowser credentials: $client_dir/.filebrowser-credentials.txt"
+        fi
+    fi
+    
     run_cmd rm -rf "$wp_dir"
 done < <(find /var -maxdepth 3 -type f -name wordpress-credentials.txt 2>/dev/null || true)
+
+echo "[INFO] Removendo arquivos de credenciais do Filebrowser restantes... / Removing remaining Filebrowser credentials files..."
+while IFS= read -r fb_creds; do
+    run_cmd rm -f "$fb_creds"
+done < <(find /var -maxdepth 2 -type f -name .filebrowser-credentials.txt 2>/dev/null || true)
 
 run_cmd rm -rf ~/azuracast-deploy-automation
 run_cmd rm -rf ~/.docker
