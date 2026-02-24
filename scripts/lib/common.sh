@@ -521,18 +521,25 @@ list_existing_clients() {
     
     # Buscar diretórios em /var/ que não sejam de sistema
     for dir in /var/*/; do
-        [ -d "$dir" ] || continue
-        local dirname=$(basename "$dir")
+        [ -d "$dir" ] 2>/dev/null || continue
+        local dirname
+        dirname=$(basename "$dir" 2>/dev/null)
         
         # Pular diretórios de sistema
         if [[ "$dirname" =~ ^($excluded_dirs)$ ]]; then
             continue
         fi
         
-        clients+=("$dirname")
+        # Adicionar apenas se não estiver vazio
+        if [ -n "$dirname" ]; then
+            clients+=("$dirname")
+        fi
     done
     
-    printf '%s\n' "${clients[@]}"
+    # Retornar apenas se houver clientes
+    if [ ${#clients[@]} -gt 0 ]; then
+        printf '%s\n' "${clients[@]}"
+    fi
 }
 
 # Solicitar nome do cliente (novo ou existente)
@@ -540,8 +547,10 @@ prompt_client_name() {
     local client_name=""
     local existing_clients=()
     
-    # Listar clientes existentes
-    mapfile -t existing_clients < <(list_existing_clients)
+    # Listar clientes existentes (filtrar vazios)
+    while IFS= read -r line; do
+        [ -n "$line" ] && existing_clients+=("$line")
+    done < <(list_existing_clients 2>/dev/null)
     
     echo "" >&2
     if [ ${#existing_clients[@]} -gt 0 ]; then
