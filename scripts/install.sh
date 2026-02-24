@@ -1308,6 +1308,9 @@ create_vhost() {
     
     # Criar estrutura de diretórios
     mkdir -p "$domain_path" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
+    
+    # Gerenciar usuário Filebrowser para o cliente
+    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
 
     local creds_file
     creds_file="$domain_path/wordpress-credentials.txt"

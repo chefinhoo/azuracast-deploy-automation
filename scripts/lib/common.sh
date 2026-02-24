@@ -514,6 +514,116 @@ prompt_domain() {
     printf "%s" "$domain"
 }
 
+# Gerenciar usuário do Filebrowser para um cliente (criar ou mostrar existente)
+manage_filebrowser_user() {
+    local client_name="$1"
+    local is_new_client="${2:-false}"
+    
+    if [ -z "$client_name" ]; then
+        log_error "Nome do cliente não fornecido" >&2
+        return 1
+    fi
+    
+    # Verificar se o container filemanager está rodando
+    if ! docker ps --format '{{.Names}}' | grep -q "^filemanager$"; then
+        log_warn "Container filemanager não está rodando. Pulando gestão de usuário." >&2
+        return 0
+    fi
+    
+    # Verificar se o diretório do cliente existe
+    if [ ! -d "/var/$client_name" ]; then
+        log_warn "Diretório /var/$client_name não existe. Pulando gestão de usuário." >&2
+        return 0
+    fi
+    
+    local creds_file="/var/$client_name/.filebrowser-credentials.txt"
+    
+    # Se o arquivo de credenciais existe, mostrar informações
+    if [ -f "$creds_file" ]; then
+        echo "" >&2
+        log_info "📁 Credenciais Filebrowser existentes para '$client_name':" >&2
+        echo "" >&2
+        grep -E "^Usuário:|^Senha:" "$creds_file" | sed 's/^/   /' >&2
+        echo "" >&2
+        log_info "Arquivo completo: $creds_file" >&2
+        echo "" >&2
+        return 0
+    fi
+    
+    # Se não existe, perguntar se deseja criar (apenas se não for novo cliente)
+    if [ "$is_new_client" = "false" ]; then
+        echo "" >&2
+        log_warn "Nenhum usuário Filebrowser encontrado para '$client_name'" >&2
+        local create_user=""
+        read -rp "Deseja criar um usuário Filebrowser agora? (s/N): " create_user
+        
+        if [[ ! "$create_user" =~ ^[sS]$ ]]; then
+            log_info "Pulando criação de usuário Filebrowser" >&2
+            return 0
+        fi
+    fi
+    
+    # Criar novo usuário
+    log_info "Criando usuário Filebrowser para cliente '$client_name'..." >&2
+    
+    # Gerar senha aleatória (16 caracteres)
+    local fb_password
+    fb_password=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-16)
+    
+    # Criar usuário no Filebrowser
+    if docker exec filemanager filebrowser users add "$client_name" \
+        --password="$fb_password" \
+        --scope="/var/$client_name" \
+        --perm.admin=false \
+        --perm.execute=false \
+        --perm.create=true \
+        --perm.rename=true \
+        --perm.modify=true \
+        --perm.delete=true \
+        --perm.share=false \
+        --perm.download=true 2>/dev/null; then
+        
+        # Salvar credenciais
+        cat > "$creds_file" <<EOF
+========================================
+CREDENCIAIS FILEBROWSER - Cliente: $client_name
+========================================
+Data: $(date '+%Y-%m-%d %H:%M:%S')
+
+Usuário: $client_name
+Senha: $fb_password
+
+Diretório: /var/$client_name
+URL de acesso: Configure via Nginx Proxy Manager
+
+IMPORTANTE:
+- Altere a senha após o primeiro acesso
+- Este usuário tem acesso APENAS ao diretório /var/$client_name
+- Não compartilhe estas credenciais
+
+========================================
+EOF
+        
+        chmod 600 "$creds_file"
+        
+        echo "" >&2
+        log_success "✅ Usuário Filebrowser criado com sucesso!" >&2
+        echo "" >&2
+        log_info "📋 Credenciais:" >&2
+        log_info "   Usuário: $client_name" >&2
+        log_info "   Senha: $fb_password" >&2
+        log_info "   Diretório: /var/$client_name" >&2
+        echo "" >&2
+        log_info "💾 Credenciais salvas em: $creds_file" >&2
+        echo "" >&2
+        
+        return 0
+    else
+        log_error "Falha ao criar usuário no Filebrowser" >&2
+        return 1
+    fi
+}
+
 # Listar clientes existentes em /var/
 list_existing_clients() {
     local clients=()
@@ -543,6 +653,7 @@ list_existing_clients() {
 }
 
 # Solicitar nome do cliente (novo ou existente)
+# Define variável global CLIENT_IS_NEW (true/false)
 prompt_client_name() {
     local client_name=""
     local existing_clients=()
@@ -569,6 +680,7 @@ prompt_client_name() {
         
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#existing_clients[@]}" ]; then
             client_name="${existing_clients[$((choice-1))]}"
+            CLIENT_IS_NEW="false"
             log_success "Cliente selecionado: $client_name" >&2
             printf "%s" "$client_name"
             return 0
@@ -578,6 +690,7 @@ prompt_client_name() {
     # Criar novo cliente
     echo "" >&2
     echo "Criando novo cliente..." >&2
+    CLIENT_IS_NEW="true"
     while [ -z "$client_name" ]; do
         read -rp "👉 Informe o nome do cliente (ex: empresa-xyz): " client_name
         

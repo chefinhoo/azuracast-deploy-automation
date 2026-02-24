@@ -70,6 +70,9 @@ provision_wordpress() {
     
     # Criar estrutura de diretórios
     mkdir -p "$domain_path" "$domain_path/db_data"
+    
+    # Gerenciar usuário Filebrowser para o cliente
+    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
 
     if [ -f "$creds_file" ]; then
         log_info "Credenciais existentes encontradas. Reutilizando..."
@@ -243,6 +246,9 @@ provision_static_site() {
     log_info "Provisionando site estático para $domain"
     
     mkdir -p "$domain_path"
+    
+    # Gerenciar usuário Filebrowser para o cliente
+    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
 
     local index_path="$domain_path/index.html"
     
