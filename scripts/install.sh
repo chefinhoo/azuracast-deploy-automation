@@ -111,12 +111,16 @@ source "${SCRIPT_DIR}/lib/common.sh"
 # INSTALAÇÃO DO DOCKER
 # ==========================================================
 ensure_docker_daemon() {
+    docker_cli_ok() {
+        env -u DOCKER_HOST -u DOCKER_CONTEXT docker info >/dev/null 2>&1
+    }
+
     if ! command_exists docker; then
         log_error "Docker CLI não encontrada."
         return 1
     fi
 
-    if docker info >/dev/null 2>&1; then
+    if docker_cli_ok; then
         log_success "Docker daemon ativo."
         return 0
     fi
@@ -129,15 +133,35 @@ ensure_docker_daemon() {
         sleep 2
     fi
 
-    if ! docker info >/dev/null 2>&1; then
+    if ! docker_cli_ok; then
         if command_exists service; then
             service docker start >/dev/null 2>&1 || true
             sleep 2
         fi
     fi
 
-    if ! docker info >/dev/null 2>&1; then
+    if ! docker_cli_ok && command_exists systemctl; then
+        systemctl restart containerd >/dev/null 2>&1 || true
+        systemctl restart docker >/dev/null 2>&1 || true
+        sleep 3
+    fi
+
+    if ! docker_cli_ok; then
+        local waited=0
+        while [ "$waited" -lt 15 ]; do
+            if docker_cli_ok; then
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+    fi
+
+    if ! docker_cli_ok; then
         log_error "Não foi possível iniciar o Docker daemon."
+        log_info "Diagnóstico rápido do Docker:"
+        env -u DOCKER_HOST -u DOCKER_CONTEXT docker version 2>/dev/null || true
+        ls -l /var/run/docker.sock 2>/dev/null || true
         if command_exists systemctl; then
             systemctl --no-pager --full status docker 2>/dev/null || true
         fi
