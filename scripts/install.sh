@@ -111,7 +111,36 @@ source "${SCRIPT_DIR}/lib/common.sh"
 # INSTALAÇÃO DO DOCKER
 # ==========================================================
 ensure_docker_daemon() {
+    detect_docker_socket() {
+        if [ -S "/var/run/docker.sock" ]; then
+            printf '%s\n' "/var/run/docker.sock"
+            return 0
+        fi
+
+        if [ -S "/run/docker.sock" ]; then
+            printf '%s\n' "/run/docker.sock"
+            return 0
+        fi
+
+        return 1
+    }
+
+    configure_docker_socket_link() {
+        if [ -S "/run/docker.sock" ] && [ ! -S "/var/run/docker.sock" ]; then
+            mkdir -p /var/run 2>/dev/null || true
+            ln -sf /run/docker.sock /var/run/docker.sock 2>/dev/null || true
+        fi
+    }
+
     docker_cli_ok() {
+        local socket_path=""
+        socket_path="$(detect_docker_socket 2>/dev/null || true)"
+
+        if [ -n "$socket_path" ]; then
+            env -u DOCKER_CONTEXT DOCKER_HOST="unix://${socket_path}" docker info >/dev/null 2>&1
+            return $?
+        fi
+
         env -u DOCKER_HOST -u DOCKER_CONTEXT docker info >/dev/null 2>&1
     }
 
@@ -121,6 +150,7 @@ ensure_docker_daemon() {
     fi
 
     if docker_cli_ok; then
+        configure_docker_socket_link
         log_success "Docker daemon ativo."
         return 0
     fi
@@ -146,6 +176,8 @@ ensure_docker_daemon() {
         sleep 3
     fi
 
+    configure_docker_socket_link
+
     if ! docker_cli_ok; then
         local waited=0
         while [ "$waited" -lt 15 ]; do
@@ -161,11 +193,18 @@ ensure_docker_daemon() {
         log_error "Não foi possível iniciar o Docker daemon."
         log_info "Diagnóstico rápido do Docker:"
         env -u DOCKER_HOST -u DOCKER_CONTEXT docker version 2>/dev/null || true
+        ls -l /run/docker.sock 2>/dev/null || true
         ls -l /var/run/docker.sock 2>/dev/null || true
         if command_exists systemctl; then
             systemctl --no-pager --full status docker 2>/dev/null || true
         fi
         return 1
+    fi
+
+    local active_socket=""
+    active_socket="$(detect_docker_socket 2>/dev/null || true)"
+    if [ -n "$active_socket" ]; then
+        export DOCKER_HOST="unix://${active_socket}"
     fi
 
     log_success "Docker daemon iniciado com sucesso."
