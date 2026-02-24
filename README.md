@@ -414,21 +414,53 @@ nslookup seudominio.com.br
 #### ❌ Certificado SSL não é emitido
 
 **Causas possíveis:**
-1. Portas 80 e 443 não estão abertas
-2. DNS não está propagado
-3. Domínio já tem muitas tentativas (limite Let's Encrypt)
+1. Portas 80 e 443 não estão abertas no firewall
+2. DNS não está propagado (aguarde 5-30 min)
+3. Domínio já tem muitas tentativas (limite Let's Encrypt de 50/semana)
+4. Containers de destino não estão rodando
+5. Permissões incorretas em /var/proxy_manager
 
-**Verificar:**
+**Diagnóstico Automático (RECOMENDADO):**
 ```bash
-# Testar se portas estão acessíveis externamente
-curl -I http://seudominio.com.br
-curl -I https://seudominio.com.br
+# Menu interativo com todas as soluções
+sudo bash scripts/ssl_resolver.sh
+
+# Ou testes específicos:
+sudo bash scripts/test_ssl_readiness.sh              # Teste de prontidão
+sudo bash scripts/ssl_troubleshoot_interactive.sh    # Troubleshooter
+sudo bash scripts/diagnose_ssl.sh                    # Diagnóstico completo
 ```
 
-**Solução:**
-1. Aguardar propagação DNS (pode levar até 48h)
-2. Verificar firewall: `sudo ufw status`
-3. Verificar logs: Nginx Proxy Manager → Settings → Logs
+**Teste Manual:**
+```bash
+# 1. Verificar DNS
+dig seudominio.com.br +short
+
+# 2. Testar se portas estão acessíveis
+curl -I http://seudominio.com.br
+curl -I https://seudominio.com.br
+
+# 3. Ver logs do NPM
+docker logs nginx-proxy-manager | tail -50
+```
+
+**Correção Rápida:**
+```bash
+# Se problema é conexão:
+cd /var/proxy_manager
+docker compose down && docker compose up -d
+sleep 30  # Aguarde 30 segundos
+
+# Se problema é permissão:
+sudo chown -R 1000:1000 /var/proxy_manager
+sudo chmod -R 755 /var/proxy_manager
+
+# Se problema é limite Let's Encrypt:
+# Aguarde 7 dias ou use certificado staging
+```
+
+**📖 Guia Completo de SSL:**
+Ver [SSL_TROUBLESHOOTING.md](SSL_TROUBLESHOOTING.md) para soluções detalhadas
 
 #### ❌ Containers não se comunicam
 
@@ -449,17 +481,36 @@ sudo bash scripts/quick_fix_networks.sh
 Se você estiver tendo problemas para acessar serviços através do proxy:
 
 ```bash
+# ========== PROXY/CONEXÃO ==========
 # Correção rápida (containers já em execução)
 sudo bash scripts/quick_fix_networks.sh
 
 # Correção completa (reinicia containers se necessário)
 sudo bash scripts/fix_proxy_issues.sh
 
-# Diagnóstico detalhado
+# Diagnóstico detalhado de proxy
 sudo bash scripts/diagnose_proxy.sh
+
+# ========== SSL/LET'S ENCRYPT ==========
+# Menu principal de resolução de SSL (RECOMENDADO)
+sudo bash scripts/ssl_resolver.sh
+
+# Teste de prontidão para criar SSL
+sudo bash scripts/test_ssl_readiness.sh
+
+# Troubleshooter interativo
+sudo bash scripts/ssl_troubleshoot_interactive.sh
+
+# Diagnóstico completo de SSL
+sudo bash scripts/diagnose_ssl.sh
+
+# Correção automática de problemas
+sudo bash scripts/fix_ssl_issues.sh
 ```
 
-Veja [TROUBLESHOOTING_PROXY.md](TROUBLESHOOTING_PROXY.md) para soluções detalhadas.
+**Documentação Detalhada:**
+- Proxy: Ver [TROUBLESHOOTING_PROXY.md](TROUBLESHOOTING_PROXY.md)
+- SSL: Ver [SSL_TROUBLESHOOTING.md](SSL_TROUBLESHOOTING.md)
 
 ## 🛡️ Gerenciamento de Firewall
 

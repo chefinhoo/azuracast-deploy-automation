@@ -61,7 +61,7 @@ fi
 HOSTNAME="mail.$MAIL_DOMAIN"
 
 log_info "Domínio configurado: $MAIL_DOMAIN"
-log_info "Hostname do servidor: $HOSTNAME"
+log_info "Hostname recomendado do servidor: $HOSTNAME"
 echo ""
 
 # Avisos importantes
@@ -92,6 +92,16 @@ if [[ ! $REPLY =~ ^[SsYy]$ ]]; then
     exit 0
 fi
 
+# Perguntar se deseja alterar o hostname
+CHANGE_HOSTNAME="Y"
+echo ""
+read -p "Deseja alterar o hostname do servidor para '$HOSTNAME'? (S/n): " -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Nn]$ ]]; then
+    CHANGE_HOSTNAME="N"
+    log_warn "O hostname NÃO será alterado. Certifique-se que DNS PTR aponta para o hostname atual."
+fi
+
 MAIL_DIR="/var/mailserver"
 POSTFIXADMIN_DIR="$MAIL_DIR/postfixadmin"
 VMAIL_DIR="/var/vmail"
@@ -106,11 +116,15 @@ log_info "Criando estrutura de diretórios..."
 mkdir -p "$MAIL_DIR" "$POSTFIXADMIN_DIR" "$VMAIL_DIR"
 chmod 770 "$VMAIL_DIR"
 
-# Configurar hostname
-log_info "Configurando hostname do sistema..."
-hostnamectl set-hostname "$HOSTNAME"
-echo "$HOSTNAME" > /etc/hostname
-log_success "Hostname configurado: $HOSTNAME"
+# Configurar hostname (se o usuário aceitou)
+if [[ "$CHANGE_HOSTNAME" == "Y" ]]; then
+    log_info "Configurando hostname do sistema..."
+    hostnamectl set-hostname "$HOSTNAME" 2>/dev/null || echo "$HOSTNAME" > /etc/hostname
+    hostname "$HOSTNAME" 2>/dev/null || true
+    log_success "Hostname configurado: $HOSTNAME"
+else
+    log_info "Hostname não será alterado (mantendo: $(hostname))"
+fi
 
 # Docker Compose para Mail Server
 log_info "Criando docker-compose.yml..."
