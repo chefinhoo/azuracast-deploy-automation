@@ -525,8 +525,24 @@ manage_filebrowser_user() {
     fi
     
     # Verificar se o container filemanager está rodando
-    if ! docker ps --format '{{.Names}}' | grep -q "^filemanager$"; then
+    if ! docker ps --format '{{.Names}}' | grep -q "^filemanager$" 2>/dev/null; then
         log_warn "Container filemanager não está rodando. Pulando gestão de usuário." >&2
+        return 0
+    fi
+    
+    # Aguardar container estar pronto (até 10 segundos)
+    local wait_count=0
+    while [ $wait_count -lt 10 ]; do
+        if docker exec filemanager filebrowser version >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+        wait_count=$((wait_count + 1))
+    done
+    
+    # Verificar se conseguiu se conectar
+    if [ $wait_count -eq 10 ]; then
+        log_warn "Container filemanager não está respondendo. Pulando gestão de usuário." >&2
         return 0
     fi
     
@@ -570,8 +586,9 @@ manage_filebrowser_user() {
     local fb_password
     fb_password=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-16)
     
-    # Criar usuário no Filebrowser
-    if docker exec filemanager filebrowser users add "$client_name" \
+    # Capturar saída de erro para debug
+    local fb_error
+    fb_error=$(docker exec filemanager filebrowser users add "$client_name" \
         --password="$fb_password" \
         --scope="/var/$client_name" \
         --perm.admin=false \
@@ -581,7 +598,10 @@ manage_filebrowser_user() {
         --perm.modify=true \
         --perm.delete=true \
         --perm.share=false \
-        --perm.download=true 2>/dev/null; then
+        --perm.download=true 2>&1)
+    
+    # Verificar se o comando foi bem-sucedido
+    if [ $? -eq 0 ]; then
         
         # Salvar credenciais
         cat > "$creds_file" <<EOF
@@ -619,8 +639,16 @@ EOF
         
         return 0
     else
-        log_error "Falha ao criar usuário no Filebrowser" >&2
-        return 1
+        # Verificar se o erro é porque o usuário já existe
+        if echo "$fb_error" | grep -qi "already exists\|já existe"; then
+            log_warn "Usuário '$client_name' já existe no Filebrowser" >&2
+            log_info "Use o painel web do Filebrowser para gerenciar este usuário" >&2
+            return 0
+        else
+            log_error "Falha ao criar usuário no Filebrowser" >&2
+            log_error "Erro: $fb_error" >&2
+            return 1
+        fi
     fi
 }
 
