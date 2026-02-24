@@ -110,11 +110,50 @@ source "${SCRIPT_DIR}/lib/common.sh"
 # ==========================================================
 # INSTALAÇÃO DO DOCKER
 # ==========================================================
+ensure_docker_daemon() {
+    if ! command_exists docker; then
+        log_error "Docker CLI não encontrada."
+        return 1
+    fi
+
+    if docker info >/dev/null 2>&1; then
+        log_success "Docker daemon ativo."
+        return 0
+    fi
+
+    log_warn "Docker está instalado, mas o daemon não está ativo. Tentando iniciar..."
+
+    if command_exists systemctl; then
+        systemctl enable docker >/dev/null 2>&1 || true
+        systemctl start docker >/dev/null 2>&1 || true
+        sleep 2
+    fi
+
+    if ! docker info >/dev/null 2>&1; then
+        if command_exists service; then
+            service docker start >/dev/null 2>&1 || true
+            sleep 2
+        fi
+    fi
+
+    if ! docker info >/dev/null 2>&1; then
+        log_error "Não foi possível iniciar o Docker daemon."
+        if command_exists systemctl; then
+            systemctl --no-pager --full status docker 2>/dev/null || true
+        fi
+        return 1
+    fi
+
+    log_success "Docker daemon iniciado com sucesso."
+    return 0
+}
+
 install_docker() {
     log_info "Iniciando instalação do Docker..."
     
     if command_exists docker; then
         log_success "Docker já está instalado: $(docker_version)"
+        ensure_docker_daemon || return 1
         return 0
     fi
     
@@ -196,6 +235,7 @@ https://download.docker.com/linux/ubuntu ${distro} stable" \
     fi
     
     sleep 2
+    ensure_docker_daemon || return 1
     log_success "Docker instalado com sucesso: $(docker_version)"
     return 0
 }
