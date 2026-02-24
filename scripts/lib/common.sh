@@ -518,18 +518,8 @@ prompt_domain() {
 manage_filebrowser_user() {
     local client_name="$1"
     local is_new_client="${2:-false}"
-    local fb_db_path="/database.db"
+    local fb_db_path=""
     local fb_config_path="/etc/config/settings.json"
-
-    # Detectar caminho real do banco dentro do container
-    if docker exec filemanager test -d /database.db 2>/dev/null; then
-        fb_db_path="/database.db/filebrowser.db"
-        docker exec filemanager sh -lc 'touch /database.db/filebrowser.db' >/dev/null 2>&1 || true
-    fi
-
-    filebrowser_cmd() {
-        docker exec filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
-    }
     
     if [ -z "$client_name" ]; then
         log_error "Nome do cliente não fornecido" >&2
@@ -541,6 +531,31 @@ manage_filebrowser_user() {
         log_warn "Container filemanager não está rodando. Pulando gestão de usuário." >&2
         return 0
     fi
+
+    detect_filebrowser_db_path() {
+        local candidate=""
+        local resolved=""
+
+        for candidate in /database.db /filebrowser.db; do
+            resolved="$candidate"
+
+            if docker exec filemanager test -d "$candidate" 2>/dev/null; then
+                resolved="$candidate/filebrowser.db"
+            fi
+
+            docker exec filemanager sh -lc "mkdir -p \"$(dirname "$resolved")\" && touch \"$resolved\"" >/dev/null 2>&1 || true
+
+            if docker exec filemanager filebrowser -d "$resolved" -c "$fb_config_path" config init >/dev/null 2>&1 || \
+               docker exec filemanager test -f "$resolved" 2>/dev/null; then
+                if docker exec filemanager test -f "$resolved" 2>/dev/null; then
+                    printf '%s\n' "$resolved"
+                    return 0
+                fi
+            fi
+        done
+
+        return 1
+    }
     
     # Aguardar container estar pronto (até 10 segundos)
     local wait_count=0
@@ -558,11 +573,15 @@ manage_filebrowser_user() {
         return 0
     fi
 
-    # Inicializar banco/config do Filebrowser caso ainda não exista
-    if ! docker exec filemanager test -f "$fb_db_path" 2>/dev/null; then
-        log_info "Inicializando banco do Filebrowser..." >&2
-        filebrowser_cmd config init >/dev/null 2>&1 || true
+    fb_db_path="$(detect_filebrowser_db_path 2>/dev/null || true)"
+    if [ -z "$fb_db_path" ]; then
+        log_warn "Não foi possível inicializar banco do Filebrowser. Pulando gestão de usuário." >&2
+        return 0
     fi
+
+    filebrowser_cmd() {
+        docker exec filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
+    }
     
     # Verificar se o diretório do cliente existe
     if [ ! -d "/var/$client_name" ]; then
@@ -663,7 +682,7 @@ EOF
 
     log_error "Falha ao criar usuário no Filebrowser" >&2
     log_error "Erro: $fb_error" >&2
-    return 1
+    return 0
 }
 
 # Listar clientes existentes em /var/
