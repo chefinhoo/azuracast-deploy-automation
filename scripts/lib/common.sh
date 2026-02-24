@@ -543,17 +543,17 @@ prompt_client_name() {
     # Listar clientes existentes
     mapfile -t existing_clients < <(list_existing_clients)
     
-    echo ""
+    echo "" >&2
     if [ ${#existing_clients[@]} -gt 0 ]; then
-        echo "Clientes existentes encontrados:"
+        echo "Clientes existentes encontrados:" >&2
         for i in "${!existing_clients[@]}"; do
-            echo "  $((i+1))) ${existing_clients[i]}"
+            echo "  $((i+1))) ${existing_clients[i]}" >&2
         done
-        echo ""
-        echo "Deseja:"
-        echo "  n) Criar um NOVO cliente"
-        echo "  1-${#existing_clients[@]}) Usar cliente existente"
-        echo ""
+        echo "" >&2
+        echo "Deseja:" >&2
+        echo "  n) Criar um NOVO cliente" >&2
+        echo "  1-${#existing_clients[@]}) Usar cliente existente" >&2
+        echo "" >&2
         
         local choice=""
         read -rp "Escolha [n/1-${#existing_clients[@]}]: " choice
@@ -567,8 +567,8 @@ prompt_client_name() {
     fi
     
     # Criar novo cliente
-    echo ""
-    echo "Criando novo cliente..."
+    echo "" >&2
+    echo "Criando novo cliente..." >&2
     while [ -z "$client_name" ]; do
         read -rp "👉 Informe o nome do cliente (ex: empresa-xyz): " client_name
         
@@ -602,8 +602,8 @@ prompt_subdirectory_name() {
     local client_name="$1"
     local subdirectory_name=""
     
-    echo ""
-    echo "Subdiretórios existentes para cliente '$client_name':"
+    echo "" >&2
+    echo "Subdiretórios existentes para cliente '$client_name':" >&2
     
     # Listar subdiretórios existentes
     if [ -d "/var/$client_name" ]; then
@@ -611,22 +611,22 @@ prompt_subdirectory_name() {
         for subdir in /var/$client_name/*/; do
             if [ -d "$subdir" ]; then
                 local dirname=$(basename "$subdir")
-                echo "  - $dirname"
+                echo "  - $dirname" >&2
                 count=$((count + 1))
             fi
         done
         
         if [ $count -eq 0 ]; then
-            echo "  (nenhum)"
+            echo "  (nenhum)" >&2
         fi
     else
-        echo "  (cliente novo - nenhum subdiretório)"
+        echo "  (cliente novo - nenhum subdiretório)" >&2
     fi
     
-    echo ""
-    echo "ℹ️  Use 'html' para o site principal"
-    echo "ℹ️  Ou informe um nome para subdomínio (ex: blog, loja, app, painel)"
-    echo ""
+    echo "" >&2
+    echo "ℹ️  Use 'html' para o site principal" >&2
+    echo "ℹ️  Ou informe um nome para subdomínio (ex: blog, loja, app, painel)" >&2
+    echo "" >&2
     
     while [ -z "$subdirectory_name" ]; do
         read -rp "👉 Nome do subdiretório: " subdirectory_name
