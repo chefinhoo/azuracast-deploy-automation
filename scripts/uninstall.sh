@@ -301,22 +301,74 @@ while IFS= read -r wp_creds; do
     wp_dir="$(dirname "$wp_creds")"
     
     # Remover arquivo de credenciais do Filebrowser se existir
-    local client_dir=$(dirname "$wp_dir")
+    client_dir="$(dirname "$wp_dir")"
     if [ -f "$client_dir/.filebrowser-credentials.txt" ]; then
         if [ "$DRY_RUN" -eq 1 ]; then
             echo "[DRY-RUN] rm -f $client_dir/.filebrowser-credentials.txt"
         else
             echo "[INFO] Removendo credenciais Filebrowser: $client_dir/.filebrowser-credentials.txt / Removing Filebrowser credentials: $client_dir/.filebrowser-credentials.txt"
         fi
+        run_cmd rm -f "$client_dir/.filebrowser-credentials.txt"
     fi
     
     run_cmd rm -rf "$wp_dir"
+
+    # Remover diretório do cliente se ficar vazio
+    if [ -d "$client_dir" ] && [ -z "$(find "$client_dir" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
+        run_cmd rm -rf "$client_dir"
+    fi
 done < <(find /var -maxdepth 3 -type f -name wordpress-credentials.txt 2>/dev/null || true)
+
+echo "[INFO] Removendo sites estáticos criados por este instalador... / Removing static sites created by this installer..."
+while IFS= read -r compose_file; do
+    static_dir="$(dirname "$compose_file")"
+
+    # Considera apenas stacks estáticos criadas pelo add_site.sh
+    if grep -Eq 'container_name:\s*site-app-' "$compose_file" 2>/dev/null; then
+        client_dir="$(dirname "$static_dir")"
+
+        run_compose_down "$static_dir"
+        run_cmd rm -rf "$static_dir"
+
+        if [ -f "$client_dir/.filebrowser-credentials.txt" ]; then
+            run_cmd rm -f "$client_dir/.filebrowser-credentials.txt"
+        fi
+
+        # Remover diretório do cliente se ficar vazio
+        if [ -d "$client_dir" ] && [ -z "$(find "$client_dir" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
+            run_cmd rm -rf "$client_dir"
+        fi
+    fi
+done < <(find /var -maxdepth 3 -type f -name docker-compose.yml 2>/dev/null || true)
 
 echo "[INFO] Removendo arquivos de credenciais do Filebrowser restantes... / Removing remaining Filebrowser credentials files..."
 while IFS= read -r fb_creds; do
     run_cmd rm -f "$fb_creds"
 done < <(find /var -maxdepth 2 -type f -name .filebrowser-credentials.txt 2>/dev/null || true)
+
+echo "[INFO] Removendo diretórios de clientes vazios em /var... / Removing empty client directories in /var..."
+while IFS= read -r client_dir; do
+    [ -d "$client_dir" ] || continue
+    run_cmd rm -rf "$client_dir"
+done < <(find /var -mindepth 1 -maxdepth 1 -type d -empty \
+    ! -name 'azuracast' \
+    ! -name 'proxy_manager' \
+    ! -name 'webmail' \
+    ! -name 'filemanager' \
+    ! -name 'mailserver' \
+    ! -name 'vmail' \
+    ! -name 'log' \
+    ! -name 'tmp' \
+    ! -name 'lib' \
+    ! -name 'cache' \
+    ! -name 'run' \
+    ! -name 'opt' \
+    ! -name 'snap' \
+    ! -name 'spool' \
+    ! -name 'mail' \
+    ! -name 'backups' \
+    ! -name 'lock' \
+    ! -name 'local' 2>/dev/null || true)
 
 run_cmd rm -rf ~/azuracast-deploy-automation
 run_cmd rm -rf ~/.docker

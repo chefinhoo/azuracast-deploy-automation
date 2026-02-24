@@ -16,6 +16,11 @@ fi
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/lib/common.sh"
 
+PROXY_DOMAIN=""
+PROXY_SCHEME="http"
+PROXY_FORWARD_HOST=""
+PROXY_FORWARD_PORT="80"
+
 connect_npm_to_network() {
     local network_name="$1"
     local backend_host="$2"
@@ -86,11 +91,11 @@ provision_wordpress() {
     fi
 
     if [ -z "$wp_db_password" ]; then
-        wp_db_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+        wp_db_password="$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)"
     fi
 
     if [ -z "$wp_db_root_password" ]; then
-        wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+        wp_db_root_password="$(openssl rand -base64 48 | tr -d '=+/' | cut -c1-32)"
     fi
 
     # Volume path sempre aponta para o diretório atual
@@ -221,6 +226,11 @@ EOF
 
     connect_npm_to_network "$wp_network_name" "$wp_container_name" "80"
 
+    PROXY_DOMAIN="$domain"
+    PROXY_SCHEME="http"
+    PROXY_FORWARD_HOST="$wp_container_name"
+    PROXY_FORWARD_PORT="80"
+
     log_success "WordPress criado para $domain"
     echo ""
     echo "Configuração no NPM:"
@@ -293,6 +303,11 @@ EOF
 
     connect_npm_to_network "$static_network_name" "$static_container_name" "80"
 
+    PROXY_DOMAIN="$domain"
+    PROXY_SCHEME="http"
+    PROXY_FORWARD_HOST="$static_container_name"
+    PROXY_FORWARD_PORT="80"
+
     log_success "Site estático criado para $domain"
     echo ""
     echo "Configuração no NPM:"
@@ -360,6 +375,12 @@ main() {
 
     echo ""
     log_success "Configuração concluída."
+    print_section "CONFIGURAÇÃO FINAL DO PROXY (NPM)"
+    echo "  Domain Names: ${PROXY_DOMAIN}"
+    echo "  Scheme: ${PROXY_SCHEME}"
+    echo "  Forward Hostname/IP: ${PROXY_FORWARD_HOST}"
+    echo "  Forward Port: ${PROXY_FORWARD_PORT}"
+    echo ""
     log_info "Depois, finalize SSL no Nginx Proxy Manager (Let's Encrypt + Force SSL)."
 }
 
