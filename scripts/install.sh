@@ -1028,6 +1028,8 @@ setup_filemanager() {
         log_warn "Backup criado em: $fb_db_backup"
     fi
     touch "$filemanager_dir/filebrowser.db" || { log_error "Falha ao criar arquivo filebrowser.db"; return 1; }
+    chmod 664 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
+    chown 1000:1000 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
     
     cd "$filemanager_dir" || { log_error "Falha ao acessar diretório"; return 1; }
     
