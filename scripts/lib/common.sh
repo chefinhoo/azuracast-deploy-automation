@@ -588,8 +588,7 @@ manage_filebrowser_user() {
     
     # Capturar saída de erro para debug
     local fb_error
-    fb_error=$(docker exec filemanager filebrowser users add "$client_name" \
-        --password="$fb_password" \
+    fb_error=$(docker exec filemanager filebrowser users add "$client_name" "$fb_password" \
         --scope="/var/$client_name" \
         --perm.admin=false \
         --perm.execute=false \
