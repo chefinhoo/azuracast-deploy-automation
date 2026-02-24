@@ -518,6 +518,12 @@ prompt_domain() {
 manage_filebrowser_user() {
     local client_name="$1"
     local is_new_client="${2:-false}"
+    local fb_db_path="/database.db"
+    local fb_config_path="/etc/config/settings.json"
+
+    filebrowser_cmd() {
+        docker exec filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
+    }
     
     if [ -z "$client_name" ]; then
         log_error "Nome do cliente não fornecido" >&2
@@ -533,7 +539,7 @@ manage_filebrowser_user() {
     # Aguardar container estar pronto (até 10 segundos)
     local wait_count=0
     while [ $wait_count -lt 10 ]; do
-        if docker exec filemanager filebrowser version >/dev/null 2>&1; then
+        if filebrowser_cmd version >/dev/null 2>&1; then
             break
         fi
         sleep 1
@@ -544,6 +550,12 @@ manage_filebrowser_user() {
     if [ $wait_count -eq 10 ]; then
         log_warn "Container filemanager não está respondendo. Pulando gestão de usuário." >&2
         return 0
+    fi
+
+    # Inicializar banco/config do Filebrowser caso ainda não exista
+    if ! docker exec filemanager test -f "$fb_db_path" 2>/dev/null; then
+        log_info "Inicializando banco do Filebrowser..." >&2
+        filebrowser_cmd config init >/dev/null 2>&1 || true
     fi
     
     # Verificar se o diretório do cliente existe
@@ -588,7 +600,7 @@ manage_filebrowser_user() {
     
     # Capturar saída de erro para debug
     local fb_error
-    fb_error=$(docker exec filemanager filebrowser users add "$client_name" "$fb_password" \
+    if fb_error=$(filebrowser_cmd users add "$client_name" "$fb_password" \
         --scope="/var/$client_name" \
         --perm.admin=false \
         --perm.execute=false \
@@ -597,10 +609,7 @@ manage_filebrowser_user() {
         --perm.modify=true \
         --perm.delete=true \
         --perm.share=false \
-        --perm.download=true 2>&1)
-    
-    # Verificar se o comando foi bem-sucedido
-    if [ $? -eq 0 ]; then
+        --perm.download=true 2>&1); then
         
         # Salvar credenciais
         cat > "$creds_file" <<EOF
@@ -637,18 +646,18 @@ EOF
         echo "" >&2
         
         return 0
-    else
-        # Verificar se o erro é porque o usuário já existe
-        if echo "$fb_error" | grep -qi "already exists\|já existe"; then
-            log_warn "Usuário '$client_name' já existe no Filebrowser" >&2
-            log_info "Use o painel web do Filebrowser para gerenciar este usuário" >&2
-            return 0
-        else
-            log_error "Falha ao criar usuário no Filebrowser" >&2
-            log_error "Erro: $fb_error" >&2
-            return 1
-        fi
     fi
+
+    # Verificar se o erro é porque o usuário já existe
+    if echo "$fb_error" | grep -qi "already exists\|já existe"; then
+        log_warn "Usuário '$client_name' já existe no Filebrowser" >&2
+        log_info "Use o painel web do Filebrowser para gerenciar este usuário" >&2
+        return 0
+    fi
+
+    log_error "Falha ao criar usuário no Filebrowser" >&2
+    log_error "Erro: $fb_error" >&2
+    return 1
 }
 
 # Listar clientes existentes em /var/

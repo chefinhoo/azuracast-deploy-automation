@@ -132,10 +132,10 @@ remove_filebrowser_users() {
         
         if [ -n "$username" ]; then
             if [ "$DRY_RUN" -eq 1 ]; then
-                echo "[DRY-RUN] docker exec filemanager filebrowser users rm $username"
+                echo "[DRY-RUN] docker exec filemanager filebrowser -d /database.db -c /etc/config/settings.json users rm $username"
             else
                 echo "[INFO] Removendo usuário Filebrowser: $username / Removing Filebrowser user: $username"
-                docker exec filemanager filebrowser users rm "$username" 2>/dev/null || \
+                docker exec filemanager filebrowser -d /database.db -c /etc/config/settings.json users rm "$username" 2>/dev/null || \
                     echo "[WARN] Não foi possível remover usuário $username (pode não existir) / Could not remove user $username (may not exist)"
             fi
         fi
