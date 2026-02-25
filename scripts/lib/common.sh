@@ -542,15 +542,15 @@ manage_filebrowser_user() {
         for candidate in /database.db /filebrowser.db; do
             resolved="$candidate"
 
-            if docker exec filemanager test -d "$candidate" 2>/dev/null; then
+            if docker exec -u 0 filemanager test -d "$candidate" 2>/dev/null; then
                 resolved="$candidate/filebrowser.db"
             fi
 
-            docker exec filemanager sh -lc "mkdir -p \"$(dirname "$resolved")\" && touch \"$resolved\"" >/dev/null 2>&1 || true
+            docker exec -u 0 filemanager sh -lc "mkdir -p \"$(dirname "$resolved")\" && touch \"$resolved\"" >/dev/null 2>&1 || true
 
-            if docker exec filemanager filebrowser -d "$resolved" -c "$fb_config_path" config init >/dev/null 2>&1 || \
-               docker exec filemanager test -f "$resolved" 2>/dev/null; then
-                if docker exec filemanager test -f "$resolved" 2>/dev/null; then
+            if docker exec -u 0 filemanager filebrowser -d "$resolved" -c "$fb_config_path" config init >/dev/null 2>&1 || \
+               docker exec -u 0 filemanager test -f "$resolved" 2>/dev/null; then
+                if docker exec -u 0 filemanager test -f "$resolved" 2>/dev/null; then
                     printf '%s\n' "$resolved"
                     return 0
                 fi
@@ -563,7 +563,7 @@ manage_filebrowser_user() {
     # Aguardar container estar pronto (até 10 segundos)
     local wait_count=0
     while [ $wait_count -lt 10 ]; do
-        if docker exec filemanager sh -lc "filebrowser version >/dev/null 2>&1"; then
+        if docker exec -u 0 filemanager sh -lc "filebrowser version >/dev/null 2>&1"; then
             break
         fi
         sleep 1
@@ -583,7 +583,7 @@ manage_filebrowser_user() {
     fi
 
     filebrowser_cmd() {
-        docker exec filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
+        docker exec -u 0 filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
     }
 
     # Garantir diretório do cliente no host e no container antes de criar usuário
