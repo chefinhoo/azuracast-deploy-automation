@@ -1066,7 +1066,7 @@ EOL
     cat > "$filemanager_dir/settings.json" <<'JSON_EOL'
 {
   "auth": {
-    "method": "simple"
+        "method": "json"
   },
   "branding": {
     "name": "Gerenciador de Arquivos"
