@@ -382,7 +382,7 @@ main() {
     echo "  Forward Port: ${PROXY_FORWARD_PORT}"
     echo ""
 
-    local filebrowser_creds_file="/var/${client_name}/.filebrowser-credentials.txt"
+    local filebrowser_creds_file="$WEB_ROOT/${client_name}/.filebrowser-credentials.txt"
     if [ -f "$filebrowser_creds_file" ]; then
         local fb_user=""
         local fb_pass=""

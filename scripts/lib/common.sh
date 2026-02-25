@@ -520,6 +520,9 @@ manage_filebrowser_user() {
     local is_new_client="${2:-false}"
     local fb_db_path=""
     local fb_config_path="/etc/config/settings.json"
+    local web_root="${WEB_ROOT:-/var}"
+    web_root="${web_root%/}"
+    local client_root="$web_root/$client_name"
     
     if [ -z "$client_name" ]; then
         log_error "Nome do cliente não fornecido" >&2
@@ -560,7 +563,7 @@ manage_filebrowser_user() {
     # Aguardar container estar pronto (até 10 segundos)
     local wait_count=0
     while [ $wait_count -lt 10 ]; do
-        if filebrowser_cmd version >/dev/null 2>&1; then
+        if docker exec filemanager sh -lc "filebrowser version >/dev/null 2>&1"; then
             break
         fi
         sleep 1
@@ -584,12 +587,12 @@ manage_filebrowser_user() {
     }
     
     # Verificar se o diretório do cliente existe
-    if [ ! -d "/var/$client_name" ]; then
-        log_warn "Diretório /var/$client_name não existe. Pulando gestão de usuário." >&2
+    if [ ! -d "$client_root" ]; then
+        log_warn "Diretório $client_root não existe. Pulando gestão de usuário." >&2
         return 0
     fi
     
-    local creds_file="/var/$client_name/.filebrowser-credentials.txt"
+    local creds_file="$client_root/.filebrowser-credentials.txt"
     
     # Se o arquivo de credenciais existe, mostrar informações
     if [ -f "$creds_file" ]; then
@@ -626,7 +629,7 @@ manage_filebrowser_user() {
     # Capturar saída de erro para debug
     local fb_error
     if fb_error=$(filebrowser_cmd users add "$client_name" "$fb_password" \
-        --scope="/var/$client_name" \
+        --scope="$client_root" \
         --perm.admin=false \
         --perm.execute=false \
         --perm.create=true \
@@ -646,12 +649,12 @@ Data: $(date '+%Y-%m-%d %H:%M:%S')
 Usuário: $client_name
 Senha: $fb_password
 
-Diretório: /var/$client_name
+Diretório: $client_root
 URL de acesso: Configure via Nginx Proxy Manager
 
 IMPORTANTE:
 - Altere a senha após o primeiro acesso
-- Este usuário tem acesso APENAS ao diretório /var/$client_name
+- Este usuário tem acesso APENAS ao diretório $client_root
 - Não compartilhe estas credenciais
 
 ========================================
@@ -665,7 +668,7 @@ EOF
         log_info "📋 Credenciais:" >&2
         log_info "   Usuário: $client_name" >&2
         log_info "   Senha: $fb_password" >&2
-        log_info "   Diretório: /var/$client_name" >&2
+        log_info "   Diretório: $client_root" >&2
         echo "" >&2
         log_info "💾 Credenciais salvas em: $creds_file" >&2
         echo "" >&2
@@ -685,13 +688,15 @@ EOF
     return 0
 }
 
-# Listar clientes existentes em /var/
+# Listar clientes existentes em WEB_ROOT
 list_existing_clients() {
     local clients=()
+    local web_root="${WEB_ROOT:-/var}"
+    web_root="${web_root%/}"
     local excluded_dirs="filemanager|webmail|azuracast|proxy_manager|mailserver|log|tmp|lib|cache|run|opt|snap|spool|mail|backups|lock|local|vmail"
     
-    # Buscar diretórios em /var/ que não sejam de sistema
-    for dir in /var/*/; do
+    # Buscar diretórios em WEB_ROOT que não sejam de sistema
+    for dir in "$web_root"/*/; do
         [ -d "$dir" ] 2>/dev/null || continue
         local dirname
         dirname=$(basename "$dir" 2>/dev/null)
@@ -717,6 +722,8 @@ list_existing_clients() {
 # Define variável global CLIENT_IS_NEW (true/false)
 prompt_client_name() {
     local client_name=""
+    local web_root="${WEB_ROOT:-/var}"
+    web_root="${web_root%/}"
     local existing_clients=()
     
     # Listar clientes existentes (filtrar vazios)
@@ -768,7 +775,7 @@ prompt_client_name() {
         fi
         
         # Verificar se já existe
-        if [ -d "/var/$client_name" ]; then
+        if [ -d "$web_root/$client_name" ]; then
             log_error "Cliente '$client_name' já existe. Use a opção de selecionar existente." >&2
             client_name=""
             continue
@@ -783,15 +790,18 @@ prompt_client_name() {
 # Solicitar nome do subdiretório (html para principal, ou nome personalizado)
 prompt_subdirectory_name() {
     local client_name="$1"
+    local web_root="${WEB_ROOT:-/var}"
+    web_root="${web_root%/}"
+    local client_root="$web_root/$client_name"
     local subdirectory_name=""
     
     echo "" >&2
     echo "Subdiretórios existentes para cliente '$client_name':" >&2
     
     # Listar subdiretórios existentes
-    if [ -d "/var/$client_name" ]; then
+    if [ -d "$client_root" ]; then
         local count=0
-        for subdir in /var/$client_name/*/; do
+        for subdir in "$client_root"/*/; do
             if [ -d "$subdir" ]; then
                 local dirname=$(basename "$subdir")
                 echo "  - $dirname" >&2
@@ -827,7 +837,7 @@ prompt_subdirectory_name() {
         fi
         
         # Verificar se já existe
-        if [ -d "/var/$client_name/$subdirectory_name" ]; then
+        if [ -d "$client_root/$subdirectory_name" ]; then
             log_error "Subdiretório '$subdirectory_name' já existe para este cliente." >&2
             subdirectory_name=""
             continue

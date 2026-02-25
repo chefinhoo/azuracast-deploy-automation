@@ -1776,14 +1776,14 @@ display_summary() {
         echo "   Via CLI (recomendado):"
         echo "   $ docker exec filemanager filebrowser users add cliente1 \\"
         echo "     --password=\"SenhaForte123!\" \\"
-        echo "     --scope=\"/var/$client_name\" \\"
+        echo "     --scope=\"$WEB_ROOT/$client_name\" \\"
         echo "     --perm.download --perm.upload --perm.create --perm.modify"
         echo ""
         echo "   Via Web: https://files.$domain"
     else
         echo "   $ docker exec filemanager filebrowser users add cliente1 \\"
         echo "     --password=\"SenhaForte123!\" \\"
-        echo "     --scope=\"/var/nome-cliente\" \\"
+        echo "     --scope=\"$WEB_ROOT/nome-cliente\" \\"
         echo "     --perm.download --perm.upload --perm.create --perm.modify"
         echo ""
     fi
