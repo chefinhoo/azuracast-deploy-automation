@@ -585,10 +585,24 @@ manage_filebrowser_user() {
     filebrowser_cmd() {
         docker exec filemanager filebrowser -d "$fb_db_path" -c "$fb_config_path" "$@"
     }
+
+    # Garantir diretório do cliente no host e no container antes de criar usuário
+    if ! mkdir -p "$client_root" 2>/dev/null; then
+        log_warn "Não foi possível garantir diretório no host: $client_root" >&2
+    fi
+
+    if ! docker exec filemanager sh -lc "mkdir -p \"$client_root\"" >/dev/null 2>&1; then
+        log_warn "Não foi possível garantir diretório no container: $client_root" >&2
+    fi
     
     # Verificar se o diretório do cliente existe
     if [ ! -d "$client_root" ]; then
         log_warn "Diretório $client_root não existe. Pulando gestão de usuário." >&2
+        return 0
+    fi
+
+    if ! docker exec filemanager test -d "$client_root" 2>/dev/null; then
+        log_warn "Diretório $client_root não existe no container filemanager. Pulando gestão de usuário." >&2
         return 0
     fi
     
