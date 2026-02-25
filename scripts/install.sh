@@ -1046,6 +1046,7 @@ services:
       - ./filebrowser.db:/database.db
       - ./settings.json:/etc/config/settings.json
       - /var:/var:rw
+            - /var:/srv/var:rw
     networks:
       - filemanager_network
       - npm_network

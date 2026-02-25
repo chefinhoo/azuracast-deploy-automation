@@ -523,6 +523,7 @@ manage_filebrowser_user() {
     local web_root="${WEB_ROOT:-/var}"
     web_root="${web_root%/}"
     local client_root="$web_root/$client_name"
+    local filebrowser_scope="/srv/var/$client_name"
     
     if [ -z "$client_name" ]; then
         log_error "Nome do cliente não fornecido" >&2
@@ -594,6 +595,10 @@ manage_filebrowser_user() {
     if ! docker exec -u 0 filemanager sh -lc "mkdir -p \"$client_root\"" >/dev/null 2>&1; then
         log_warn "Não foi possível garantir diretório no container: $client_root" >&2
     fi
+
+    if ! docker exec -u 0 filemanager sh -lc "mkdir -p \"$filebrowser_scope\"" >/dev/null 2>&1; then
+        log_warn "Não foi possível garantir diretório de scope no container: $filebrowser_scope" >&2
+    fi
     
     # Verificar se o diretório do cliente existe
     if [ ! -d "$client_root" ]; then
@@ -603,6 +608,11 @@ manage_filebrowser_user() {
 
     if ! docker exec -u 0 filemanager test -d "$client_root" 2>/dev/null; then
         log_warn "Diretório $client_root não existe no container filemanager. Pulando gestão de usuário." >&2
+        return 0
+    fi
+
+    if ! docker exec -u 0 filemanager test -d "$filebrowser_scope" 2>/dev/null; then
+        log_warn "Diretório de scope $filebrowser_scope não existe no container filemanager. Pulando gestão de usuário." >&2
         return 0
     fi
     
@@ -643,7 +653,7 @@ manage_filebrowser_user() {
     # Capturar saída de erro para debug
     local fb_error
     local add_user_cmd=(users add "$client_name" "$fb_password" \
-        --scope="$client_root" \
+        --scope="$filebrowser_scope" \
         --perm.admin=false \
         --perm.execute=false \
         --perm.create=true \
@@ -708,7 +718,7 @@ EOF
             --perm.share=false \
             --perm.download=true)
 
-        local scope_update_cmd=(users update "$client_name" --scope="$client_root")
+        local scope_update_cmd=(users update "$client_name" --scope="$filebrowser_scope")
 
         if fb_error=$(filebrowser_cmd "${add_user_no_scope_cmd[@]}" 2>&1); then
             if fb_error=$(filebrowser_cmd "${scope_update_cmd[@]}" 2>&1); then
