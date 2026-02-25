@@ -591,7 +591,7 @@ manage_filebrowser_user() {
         log_warn "Não foi possível garantir diretório no host: $client_root" >&2
     fi
 
-    if ! docker exec filemanager sh -lc "mkdir -p \"$client_root\"" >/dev/null 2>&1; then
+    if ! docker exec -u 0 filemanager sh -lc "mkdir -p \"$client_root\"" >/dev/null 2>&1; then
         log_warn "Não foi possível garantir diretório no container: $client_root" >&2
     fi
     
@@ -642,7 +642,7 @@ manage_filebrowser_user() {
     
     # Capturar saída de erro para debug
     local fb_error
-    if fb_error=$(filebrowser_cmd users add "$client_name" "$fb_password" \
+    local add_user_cmd=(users add "$client_name" "$fb_password" \
         --scope="$client_root" \
         --perm.admin=false \
         --perm.execute=false \
@@ -651,7 +651,9 @@ manage_filebrowser_user() {
         --perm.modify=true \
         --perm.delete=true \
         --perm.share=false \
-        --perm.download=true 2>&1); then
+        --perm.download=true)
+
+    if fb_error=$(filebrowser_cmd "${add_user_cmd[@]}" 2>&1); then
         
         # Salvar credenciais
         cat > "$creds_file" <<EOF
@@ -688,6 +690,50 @@ EOF
         echo "" >&2
         
         return 0
+    fi
+
+    # Tentativa de auto-correção para erro de diretório home ausente
+    if echo "$fb_error" | grep -qi "failed to create user home dir\|file does not exist"; then
+        log_warn "Falha ao criar home do usuário no Filebrowser. Tentando corrigir diretório e repetir..." >&2
+
+        docker exec -u 0 filemanager sh -lc "mkdir -p \"$client_root\" && chmod 755 \"$client_root\"" >/dev/null 2>&1 || true
+
+        if fb_error=$(filebrowser_cmd "${add_user_cmd[@]}" 2>&1); then
+            cat > "$creds_file" <<EOF
+========================================
+CREDENCIAIS FILEBROWSER - Cliente: $client_name
+========================================
+Data: $(date '+%Y-%m-%d %H:%M:%S')
+
+Usuário: $client_name
+Senha: $fb_password
+
+Diretório: $client_root
+URL de acesso: Configure via Nginx Proxy Manager
+
+IMPORTANTE:
+- Altere a senha após o primeiro acesso
+- Este usuário tem acesso APENAS ao diretório $client_root
+- Não compartilhe estas credenciais
+
+========================================
+EOF
+
+            chmod 600 "$creds_file"
+
+            echo "" >&2
+            log_success "✅ Usuário Filebrowser criado com sucesso após correção de diretório!" >&2
+            echo "" >&2
+            log_info "📋 Credenciais:" >&2
+            log_info "   Usuário: $client_name" >&2
+            log_info "   Senha: $fb_password" >&2
+            log_info "   Diretório: $client_root" >&2
+            echo "" >&2
+            log_info "💾 Credenciais salvas em: $creds_file" >&2
+            echo "" >&2
+
+            return 0
+        fi
     fi
 
     # Verificar se o erro é porque o usuário já existe
