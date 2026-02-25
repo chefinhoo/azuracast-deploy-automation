@@ -718,7 +718,7 @@ EOF
             --perm.share=false \
             --perm.download=true)
 
-        local scope_update_cmd=(users update "$client_name" --scope="$filebrowser_scope")
+        local scope_update_cmd=(users update "$client_name" --scope="$filebrowser_scope" --password "$fb_password")
 
         if fb_error=$(filebrowser_cmd "${add_user_no_scope_cmd[@]}" 2>&1); then
             if fb_error=$(filebrowser_cmd "${scope_update_cmd[@]}" 2>&1); then
@@ -759,10 +759,30 @@ EOF
             fi
         fi
 
-        # Caso o usuário já exista na tentativa fallback, aplicar apenas o scope
+        # Caso o usuário já exista na tentativa fallback, aplicar scope + senha
         if echo "$fb_error" | grep -qi "already exists\|já existe"; then
             if fb_error=$(filebrowser_cmd "${scope_update_cmd[@]}" 2>&1); then
-                log_success "Scope do usuário '$client_name' atualizado para $client_root" >&2
+                cat > "$creds_file" <<EOF
+========================================
+CREDENCIAIS FILEBROWSER - Cliente: $client_name
+========================================
+Data: $(date '+%Y-%m-%d %H:%M:%S')
+
+Usuário: $client_name
+Senha: $fb_password
+
+Diretório: $client_root
+URL de acesso: Configure via Nginx Proxy Manager
+
+IMPORTANTE:
+- Altere a senha após o primeiro acesso
+- Este usuário tem acesso APENAS ao diretório $client_root
+- Não compartilhe estas credenciais
+
+========================================
+EOF
+                chmod 600 "$creds_file"
+                log_success "Usuário '$client_name' já existia: senha redefinida e scope atualizado para $client_root" >&2
                 return 0
             fi
         fi
@@ -808,6 +828,31 @@ EOF
 
     # Verificar se o erro é porque o usuário já existe
     if echo "$fb_error" | grep -qi "already exists\|já existe"; then
+        if fb_error=$(filebrowser_cmd users update "$client_name" --scope="$filebrowser_scope" --password "$fb_password" 2>&1); then
+            cat > "$creds_file" <<EOF
+========================================
+CREDENCIAIS FILEBROWSER - Cliente: $client_name
+========================================
+Data: $(date '+%Y-%m-%d %H:%M:%S')
+
+Usuário: $client_name
+Senha: $fb_password
+
+Diretório: $client_root
+URL de acesso: Configure via Nginx Proxy Manager
+
+IMPORTANTE:
+- Altere a senha após o primeiro acesso
+- Este usuário tem acesso APENAS ao diretório $client_root
+- Não compartilhe estas credenciais
+
+========================================
+EOF
+            chmod 600 "$creds_file"
+            log_success "Usuário '$client_name' já existia: senha redefinida e credenciais atualizadas." >&2
+            return 0
+        fi
+
         log_warn "Usuário '$client_name' já existe no Filebrowser" >&2
         log_info "Use o painel web do Filebrowser para gerenciar este usuário" >&2
         return 0
