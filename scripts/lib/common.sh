@@ -601,7 +601,7 @@ manage_filebrowser_user() {
         return 0
     fi
 
-    if ! docker exec filemanager test -d "$client_root" 2>/dev/null; then
+    if ! docker exec -u 0 filemanager test -d "$client_root" 2>/dev/null; then
         log_warn "Diretório $client_root não existe no container filemanager. Pulando gestão de usuário." >&2
         return 0
     fi
@@ -694,10 +694,70 @@ EOF
 
     # Tentativa de auto-correção para erro de diretório home ausente
     if echo "$fb_error" | grep -qi "failed to create user home dir\|file does not exist"; then
-        log_warn "Falha ao criar home do usuário no Filebrowser. Tentando corrigir diretório e repetir..." >&2
+        log_warn "Falha ao criar home do usuário no Filebrowser. Tentando fallback sem scope e update posterior..." >&2
 
         docker exec -u 0 filemanager sh -lc "mkdir -p \"$client_root\" && chmod 755 \"$client_root\"" >/dev/null 2>&1 || true
 
+        local add_user_no_scope_cmd=(users add "$client_name" "$fb_password" \
+            --perm.admin=false \
+            --perm.execute=false \
+            --perm.create=true \
+            --perm.rename=true \
+            --perm.modify=true \
+            --perm.delete=true \
+            --perm.share=false \
+            --perm.download=true)
+
+        local scope_update_cmd=(users update "$client_name" --scope="$client_root")
+
+        if fb_error=$(filebrowser_cmd "${add_user_no_scope_cmd[@]}" 2>&1); then
+            if fb_error=$(filebrowser_cmd "${scope_update_cmd[@]}" 2>&1); then
+                cat > "$creds_file" <<EOF
+========================================
+CREDENCIAIS FILEBROWSER - Cliente: $client_name
+========================================
+Data: $(date '+%Y-%m-%d %H:%M:%S')
+
+Usuário: $client_name
+Senha: $fb_password
+
+Diretório: $client_root
+URL de acesso: Configure via Nginx Proxy Manager
+
+IMPORTANTE:
+- Altere a senha após o primeiro acesso
+- Este usuário tem acesso APENAS ao diretório $client_root
+- Não compartilhe estas credenciais
+
+========================================
+EOF
+
+                chmod 600 "$creds_file"
+
+                echo "" >&2
+                log_success "✅ Usuário Filebrowser criado com sucesso via fallback (add + update scope)!" >&2
+                echo "" >&2
+                log_info "📋 Credenciais:" >&2
+                log_info "   Usuário: $client_name" >&2
+                log_info "   Senha: $fb_password" >&2
+                log_info "   Diretório: $client_root" >&2
+                echo "" >&2
+                log_info "💾 Credenciais salvas em: $creds_file" >&2
+                echo "" >&2
+
+                return 0
+            fi
+        fi
+
+        # Caso o usuário já exista na tentativa fallback, aplicar apenas o scope
+        if echo "$fb_error" | grep -qi "already exists\|já existe"; then
+            if fb_error=$(filebrowser_cmd "${scope_update_cmd[@]}" 2>&1); then
+                log_success "Scope do usuário '$client_name' atualizado para $client_root" >&2
+                return 0
+            fi
+        fi
+
+        # Última tentativa: repetir comando original com scope
         if fb_error=$(filebrowser_cmd "${add_user_cmd[@]}" 2>&1); then
             cat > "$creds_file" <<EOF
 ========================================
