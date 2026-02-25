@@ -1039,7 +1039,7 @@ services:
     image: filebrowser/filebrowser:latest
     container_name: filemanager
     restart: unless-stopped
-        command: ["filebrowser", "-d", "/database.db", "-c", "/etc/config/settings.json", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
+        command: ["-d", "/database.db", "-c", "/etc/config/settings.json", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
     ports:
       - "9001:80"
     volumes:
