@@ -532,8 +532,17 @@ manage_filebrowser_user() {
     
     # Verificar se o container filemanager está rodando
     if ! docker ps --format '{{.Names}}' | grep -q "^filemanager$" 2>/dev/null; then
-        log_warn "Container filemanager não está rodando. Pulando gestão de usuário." >&2
-        return 0
+        log_warn "Container filemanager não está rodando. Tentando iniciar automaticamente..." >&2
+
+        if [ -f "/var/filemanager/docker-compose.yml" ]; then
+            (cd /var/filemanager && docker compose up -d filemanager >/dev/null 2>&1) || true
+            sleep 2
+        fi
+
+        if ! docker ps --format '{{.Names}}' | grep -q "^filemanager$" 2>/dev/null; then
+            log_warn "Container filemanager não está rodando. Pulando gestão de usuário." >&2
+            return 0
+        fi
     fi
 
     detect_filebrowser_db_path() {
