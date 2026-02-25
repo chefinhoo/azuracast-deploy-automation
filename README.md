@@ -20,7 +20,7 @@ Automação completa de instalação para **AzuraCast** + **Nginx Proxy Manager*
 - ✅ **Docker Compose** automatizado
 - ✅ **Nginx Proxy Manager** com SSL/Let's Encrypt
 - ✅ **AzuraCast** - servidor de rádio
-- ✅ **WordPress** multi-site (structure: `/var/cliente-nome/subdirectory/`)
+- ✅ **WordPress** multi-site (estrutura: `$WEB_ROOT/cliente-nome/subdirectory/`)
 - ✅ **Roundcube** webmail
 - ✅ **Filebrowser** com usuários isolados por cliente
 - ✅ **Servidor de E-mail** (optional)
@@ -68,7 +68,7 @@ sudo bash scripts/add_site.sh
 ```
 
 O script criará:
-- Estrutura em `/var/cliente-nome/html/` (ou outro subdiretório)
+- Estrutura em `$WEB_ROOT/cliente-nome/html/` (ou outro subdiretório)
 - Usuário Filebrowser automático
 - WordPress com MariaDB
 
@@ -78,10 +78,12 @@ Novo cliente: empresa-xyz
 Subdiretório: html
 Domínio: empresa-xyz.com.br
 
-✓ Criado em /var/empresa-xyz/html/
+✓ Criado em $WEB_ROOT/empresa-xyz/html/
 ✓ Usuário Filebrowser: empresa-xyz
-✓ Credenciais: /var/empresa-xyz/.filebrowser-credentials.txt
+✓ Credenciais: $WEB_ROOT/empresa-xyz/.filebrowser-credentials.txt
 ```
+
+> Observação: por padrão `WEB_ROOT=/var`. Se desejar outro caminho base, defina `WEB_ROOT` no ambiente ou no arquivo `.deploy-config`.
 
 ## 📁 Estrutura
 
@@ -142,6 +144,15 @@ sudo bash scripts/diagnose_proxy.sh
 cd /var/filemanager
 docker compose restart filemanager
 docker logs filemanager
+```
+
+### Erro ao criar usuário no Filebrowser (banco SQLite)
+
+O instalador já corrige automaticamente o banco para arquivo em `/var/filemanager/filebrowser.db` e monta no container como `/database.db`.
+
+```bash
+ls -lah /var/filemanager/filebrowser.db
+docker exec filemanager sh -lc 'ls -lah /database.db && filebrowser version'
 ```
 
 ### Ver logs
@@ -222,4 +233,4 @@ Veja [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) para detalhes.
 
 ---
 
-**Última atualização**: 2026-02-24
+**Última atualização**: 2026-02-25
