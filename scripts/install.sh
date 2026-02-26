@@ -1970,7 +1970,7 @@ main() {
     log_success "Instalação concluída com sucesso!"
     log_info "Logs armazenados em: $LOG_FILE"
 }
-docker logs filemanager --tail 50
+# docker logs filemanager --tail 50
 # Execução
 main "$@"
 
