@@ -146,6 +146,49 @@ docker compose restart filemanager
 docker logs filemanager
 ```
 
+### Timeout ou erro ao criar usuário no Filebrowser
+
+Se ao criar um usuário aparecer erro de timeout ou mensagens como:
+
+```
+Error: timeout
+Using config file: /etc/config/settings.json
+Using database: /database.db
+```
+
+Verifique:
+
+1. Se o container `filemanager` está rodando:
+    ```bash
+    docker ps | grep filemanager
+    ```
+    Se não aparecer, suba novamente:
+    ```bash
+    cd /var/filemanager
+    docker compose up -d
+    ```
+2. Se o banco `/var/filemanager/filebrowser.db` existe e é arquivo:
+    ```bash
+    ls -lh /var/filemanager/filebrowser.db
+    file /var/filemanager/filebrowser.db
+    ```
+    Se for diretório, remova e crie como arquivo vazio:
+    ```bash
+    rm -rf /var/filemanager/filebrowser.db
+    touch /var/filemanager/filebrowser.db
+    chown 1000:1000 /var/filemanager/filebrowser.db
+    chmod 664 /var/filemanager/filebrowser.db
+    ```
+3. Reinicie o container após corrigir:
+    ```bash
+    docker compose restart filemanager
+    ```
+
+Se persistir, veja logs detalhados:
+```bash
+docker logs filemanager
+```
+
 ### Erro ao criar usuário no Filebrowser (banco SQLite)
 
 O instalador já corrige automaticamente o banco para arquivo em `/var/filemanager/filebrowser.db` e monta no container como `/database.db`.
