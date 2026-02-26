@@ -1015,7 +1015,7 @@ setup_filemanager() {
     log_info "Instalando Filebrowser..."
 
     local filemanager_dir="/var/filemanager"
-    mkdir -p "$filemanager_dir/root" || {
+    mkdir -p "$filemanager_dir" || {
         log_error "Falha ao criar diretório"
         return 1
     }
@@ -1033,8 +1033,8 @@ setup_filemanager() {
 
     # Cria banco vazio
     touch "$filemanager_dir/filebrowser.db"
-    chmod 664 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
-    chown 1000:1000 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
+    chmod 664 "$filemanager_dir/filebrowser.db"
+    chown $(id -u):$(id -g) "$filemanager_dir/filebrowser.db"
 
     # Docker Compose
     cat > "$filemanager_dir/docker-compose.yml" <<EOF
@@ -1061,6 +1061,9 @@ networks:
     name: proxy_manager_npm_network
 EOF
 
+    log_info "Removendo containers antigos (se existirem)..."
+    docker rm -f filemanager 2>/dev/null || true
+
     log_info "Iniciando container..."
     if ! docker compose up -d; then
         log_error "Falha ao iniciar Filebrowser"
@@ -1075,7 +1078,6 @@ EOF
     fb_pass=$(openssl rand -base64 14 | tr -d "=+/")
 
     log_info "Criando usuário administrador..."
-
     docker exec filemanager filebrowser users add "$fb_user" "$fb_pass" --perm.admin 2>/dev/null || true
 
     # Salva credenciais
@@ -1083,7 +1085,7 @@ EOF
 ========================================
 GERENCIADOR DE ARQUIVOS (FILEBROWSER)
 ========================================
-URL: http://IP-DO-SERVIDOR:8090
+URL: http://IP-DO-SERVIDOR:8091
 Usuário: $fb_user
 Senha: $fb_pass
 ========================================
