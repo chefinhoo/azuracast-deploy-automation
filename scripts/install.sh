@@ -1033,34 +1033,29 @@ setup_filemanager() {
     
     cd "$filemanager_dir" || { log_error "Falha ao acessar diretório"; return 1; }
     
-    cat > "$filemanager_dir/docker-compose.yml" <<'EOL'
+        cat > "$filemanager_dir/docker-compose.yml" <<'EOL'
 services:
-  filemanager:
-    image: filebrowser/filebrowser:latest
-    container_name: filemanager
-    restart: unless-stopped
+    filemanager:
+        image: filebrowser/filebrowser:latest
+        container_name: filemanager
+        restart: unless-stopped
         command: ["-d", "/database.db", "-c", "/etc/config/settings.json", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
-    ports:
-      - "9001:80"
-    volumes:
-      - ./root:/srv
-      - ./filebrowser.db:/database.db
-      - ./settings.json:/etc/config/settings.json
-      - /var:/var:rw
-            - /var:/srv/var:rw
-    networks:
-      - filemanager_network
-      - npm_network
-
-volumes:
-  filebrowser_data:
+        ports:
+            - "9001:80"
+        volumes:
+            - ./root:/srv
+            - ./filebrowser.db:/database.db
+            - ./settings.json:/etc/config/settings.json
+        networks:
+            - filemanager_network
+            - npm_network
 
 networks:
-  filemanager_network:
-    driver: bridge
-  npm_network:
-    external: true
-    name: proxy_manager_npm_network
+    filemanager_network:
+        driver: bridge
+    npm_network:
+        external: true
+        name: proxy_manager_npm_network
 EOL
 
     # Configuração do Filebrowser
