@@ -1046,6 +1046,7 @@ services:
             - ./root:/srv
             - ./filebrowser.db:/database.db
             - ./settings.json:/etc/config/settings.json
+            - /var/www:/var/www
         networks:
             - filemanager_network
             - npm_network
@@ -1665,7 +1666,7 @@ display_summary() {
         echo "📝 WordPress: $domain"
         echo "   Cliente: $client_name"
         echo "   Subdiretório: $subdirectory_name"
-        echo "   Diretório: $WEB_ROOT/$client_name/$subdirectory_name"
+        echo "   Diretório: $WEB_ROOT/www/$client_name/$subdirectory_name"
         echo "   Credenciais DB: $WEB_ROOT/$client_name/$subdirectory_name/wordpress-credentials.txt"
         echo "   Proxy interno: wp-app-${domain//./-}:80 (sem porta pública)"
         echo
