@@ -1015,7 +1015,7 @@ setup_filemanager() {
     log_info "Instalando Filebrowser..."
 
     local filemanager_dir="/var/filemanager"
-    mkdir -p "$filemanager_dir" || {
+    mkdir -p "$filemanager_dir/root" || {
         log_error "Falha ao criar diretório"
         return 1
     }
@@ -1033,8 +1033,8 @@ setup_filemanager() {
 
     # Cria banco vazio
     touch "$filemanager_dir/filebrowser.db"
-    chmod 664 "$filemanager_dir/filebrowser.db"
-    chown $(id -u):$(id -g) "$filemanager_dir/filebrowser.db"
+    chmod 664 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
+    chown 1000:1000 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
 
     # Docker Compose
     cat > "$filemanager_dir/docker-compose.yml" <<EOF
@@ -1045,10 +1045,11 @@ services:
     restart: unless-stopped
     command: ["-d", "/database.db", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
     ports:
-      - "8091:80"
+      - "8090:80"
     volumes:
-      - /var/www:/srv
+      - ./root:/srv
       - ./filebrowser.db:/database.db
+      - /var/www:/var/www
     networks:
       - filemanager_network
       - npm_network
@@ -1060,9 +1061,6 @@ networks:
     external: true
     name: proxy_manager_npm_network
 EOF
-
-    log_info "Removendo containers antigos (se existirem)..."
-    docker rm -f filemanager 2>/dev/null || true
 
     log_info "Iniciando container..."
     if ! docker compose up -d; then
@@ -1085,7 +1083,7 @@ EOF
 ========================================
 GERENCIADOR DE ARQUIVOS (FILEBROWSER)
 ========================================
-URL: http://IP-DO-SERVIDOR:8091
+URL: http://IP-DO-SERVIDOR:8090
 Usuário: $fb_user
 Senha: $fb_pass
 ========================================
