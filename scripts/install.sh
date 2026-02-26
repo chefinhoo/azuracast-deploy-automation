@@ -1001,104 +1001,102 @@ NGINX_EOL
 }
 
 # ==========================================================
-# FILEBROWSER - GERENCIADOR DE ARQUIVOS
+# FILEBROWSER - GERENCIADOR DE ARQUIVOS (VERSÃO PRODUÇÃO)
 # ==========================================================
 setup_filemanager() {
-    local install_filemanager
-    install_filemanager="${INSTALL_FILEMANAGER:-1}"
-    
+
+    local install_filemanager="${INSTALL_FILEMANAGER:-1}"
+
     if [ "$install_filemanager" != "1" ]; then
         log_info "Gerenciador de arquivos desabilitado (INSTALL_FILEMANAGER=0)"
         return 0
     fi
-    
-    log_info "Instalando Filebrowser..."
-    
-    local filemanager_dir="/var/filemanager"
-    mkdir -p "$filemanager_dir/root" || { log_error "Falha ao criar diretório"; return 1; }
 
-    # Garantir que filebrowser.db seja arquivo (evita mount como diretório em /database.db)
-    if [ -d "$filemanager_dir/filebrowser.db" ]; then
-        log_warn "Encontrado diretório em $filemanager_dir/filebrowser.db. Corrigindo para arquivo..."
-        local fb_db_backup="${filemanager_dir}/filebrowser.db.backup-$(date +%Y%m%d-%H%M%S)"
-        mv "$filemanager_dir/filebrowser.db" "$fb_db_backup" || {
-            log_error "Falha ao corrigir filebrowser.db (diretório)."
-            return 1
-        }
-        log_warn "Backup criado em: $fb_db_backup"
+    log_info "Instalando Filebrowser..."
+
+    local filemanager_dir="/var/filemanager"
+    mkdir -p "$filemanager_dir/root" || {
+        log_error "Falha ao criar diretório"
+        return 1
+    }
+
+    cd "$filemanager_dir" || {
+        log_error "Falha ao acessar diretório"
+        return 1
+    }
+
+    # Remove banco antigo para evitar conflitos
+    if [ -f "$filemanager_dir/filebrowser.db" ]; then
+        log_warn "Banco antigo encontrado. Removendo para instalação limpa..."
+        rm -f "$filemanager_dir/filebrowser.db"
     fi
-    touch "$filemanager_dir/filebrowser.db" || { log_error "Falha ao criar arquivo filebrowser.db"; return 1; }
+
+    # Cria banco vazio
+    touch "$filemanager_dir/filebrowser.db"
     chmod 664 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
     chown 1000:1000 "$filemanager_dir/filebrowser.db" 2>/dev/null || true
-    
-    cd "$filemanager_dir" || { log_error "Falha ao acessar diretório"; return 1; }
-    
-        cat > "$filemanager_dir/docker-compose.yml" <<'EOL'
+
+    # Docker Compose
+    cat > "$filemanager_dir/docker-compose.yml" <<EOF
 services:
-    filemanager:
-        image: filebrowser/filebrowser:latest
-        container_name: filemanager
-        restart: unless-stopped
-        command: ["-d", "/database.db", "-c", "/etc/config/settings.json", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
-        ports:
-            - "9001:80"
-        volumes:
-            - ./root:/srv
-            - ./filebrowser.db:/database.db
-            - ./settings.json:/etc/config/settings.json
-            - /var/www:/var/www
-        networks:
-            - filemanager_network
-            - npm_network
+  filemanager:
+    image: filebrowser/filebrowser:latest
+    container_name: filemanager
+    restart: unless-stopped
+    command: ["-d", "/database.db", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
+    ports:
+      - "8090:80"
+    volumes:
+      - ./root:/srv
+      - ./filebrowser.db:/database.db
+      - /var/www:/var/www
+    networks:
+      - filemanager_network
+      - npm_network
 
 networks:
-    filemanager_network:
-        driver: bridge
-    npm_network:
-        external: true
-        name: proxy_manager_npm_network
-EOL
+  filemanager_network:
+    driver: bridge
+  npm_network:
+    external: true
+    name: proxy_manager_npm_network
+EOF
 
-    # Configuração do Filebrowser
-    cat > "$filemanager_dir/settings.json" <<'JSON_EOL'
-{
-  "auth": {
-        "method": "json"
-  },
-  "branding": {
-    "name": "Gerenciador de Arquivos"
-  },
-  "commands": {},
-  "editors": {
-    "editormd": {
-      "extensions": ["md", "markdown", "mdown", "mkd", "mkdn"]
-    }
-  },
-  "rules": [],
-  "shell": [],
-  "signup": false,
-  "username": "admin",
-  "password": "password"
-}
-JSON_EOL
-
-    log_info "Iniciando containers de Gerenciador de Arquivos..."
-    if docker compose up -d; then
-        log_success "Filebrowser instalado com sucesso"
-        sleep 3
-        echo "filemanager" >> /tmp/deployed_services
-    else
+    log_info "Iniciando container..."
+    if ! docker compose up -d; then
         log_error "Falha ao iniciar Filebrowser"
         return 1
     fi
-    
-    log_info "Próximos passos para Filebrowser:"
-    log_info "  1. Configurar domínio no Nginx Proxy Manager"
-    log_info "  2. Acessar: http://seu-dominio.com/files"
-    log_info "  3. Login padrão: admin / password"
-    log_info "  4. IMPORTANTE: Alterar senha em Settings"
-    log_info "  5. Configurar permissões de pastas em Settings > Rules"
-    
+
+    sleep 5
+
+    # Gera senha segura automaticamente
+    local fb_user="admin"
+    local fb_pass
+    fb_pass=$(openssl rand -base64 14 | tr -d "=+/")
+
+    log_info "Criando usuário administrador..."
+
+    docker exec filemanager filebrowser users add "$fb_user" "$fb_pass" --perm.admin 2>/dev/null || true
+
+    # Salva credenciais
+    cat > "$filemanager_dir/credentials.txt" <<EOF
+========================================
+GERENCIADOR DE ARQUIVOS (FILEBROWSER)
+========================================
+URL: http://IP-DO-SERVIDOR:8090
+Usuário: $fb_user
+Senha: $fb_pass
+========================================
+EOF
+
+    chmod 600 "$filemanager_dir/credentials.txt"
+
+    log_success "Filebrowser instalado com sucesso!"
+    log_success "Credenciais salvas em: $filemanager_dir/credentials.txt"
+
+    echo "filemanager" >> /tmp/deployed_services
+
     return 0
 }
 
