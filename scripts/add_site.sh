@@ -57,7 +57,7 @@ provision_wordpress() {
     local subdirectory_name="$3"
     
     local slug="${domain//./-}"
-    local domain_path="$WEB_ROOT/$client_name/$subdirectory_name"
+    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
     log_info "Caminho do site: $domain_path"
     
@@ -246,7 +246,7 @@ provision_static_site() {
     local subdirectory_name="$3"
     
     local slug="${domain//./-}"
-    local domain_path="$WEB_ROOT/$client_name/$subdirectory_name"
+    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
     log_info "Caminho do site: $domain_path"
     

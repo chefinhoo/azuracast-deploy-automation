@@ -1408,7 +1408,7 @@ create_vhost() {
     echo "  Cliente: $client_name"
     echo "  Subdiretório: $subdirectory_name"
     echo "  Domínio: $domain"
-    echo "  Caminho completo: $WEB_ROOT/$client_name/$subdirectory_name"
+    echo "  Caminho completo: $WEB_ROOT/www/$client_name/$subdirectory_name"
     echo ""
     
     local domain_slug="${domain//./-}"
@@ -1416,7 +1416,7 @@ create_vhost() {
     local wp_db_container_name="wp-db-${domain_slug}"
     local wp_network_name="wp-${domain_slug}-network"
     
-    local domain_path="$WEB_ROOT/$client_name/$subdirectory_name"
+    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
     log_info "Criando estrutura em $domain_path"
     
