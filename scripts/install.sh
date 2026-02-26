@@ -1047,9 +1047,8 @@ services:
     ports:
       - "8090:80"
     volumes:
-      - ./root:/srv
+      - /var/www:/srv
       - ./filebrowser.db:/database.db
-      - /var/www:/var/www
     networks:
       - filemanager_network
       - npm_network
