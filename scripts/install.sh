@@ -1045,11 +1045,10 @@ services:
     restart: unless-stopped
     command: ["-d", "/database.db", "-r", "/srv", "-a", "0.0.0.0", "-p", "80"]
     ports:
-      - "8090:80"
+      - "8091:80"
     volumes:
-      - ./root:/srv
+      - /var/www:/srv
       - ./filebrowser.db:/database.db
-      - /var/www:/var/www
     networks:
       - filemanager_network
       - npm_network
