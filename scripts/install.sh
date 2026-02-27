@@ -1492,52 +1492,53 @@ create_vhost() {
         log_error "Variáveis de container/network não definidas. Abortando geração do docker-compose.yml."
         return 1
     fi
-    cat > "$wp_compose_file" <<EOF || { log_error "Falha ao criar docker-compose do WordPress"; return 1; }
-    if [ ! -f "$wp_compose_file" ]; then
-        log_error "Arquivo docker-compose.yml não foi criado corretamente em $domain_path."
-        return 1
-    fi
-    log_info "Arquivo docker-compose.yml criado: $wp_compose_file"
+        cat > "$wp_compose_file" <<EOF
 services:
-  wp-db:
-    image: mariadb:10.11
-    container_name: ${wp_db_container_name}
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
-      MYSQL_DATABASE: ${wp_db_name}
-      MYSQL_USER: ${wp_db_user}
-      MYSQL_PASSWORD: ${wp_db_password}
-    volumes:
-      - ./db_data:/var/lib/mysql
-    networks:
-      - wp_network
+    wp-db:
+        image: mariadb:10.11
+        container_name: ${wp_db_container_name}
+        restart: unless-stopped
+        environment:
+            MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
+            MYSQL_DATABASE: ${wp_db_name}
+            MYSQL_USER: ${wp_db_user}
+            MYSQL_PASSWORD: ${wp_db_password}
+        volumes:
+            - ./db_data:/var/lib/mysql
+        networks:
+            - wp_network
 
-  wordpress:
-    image: wordpress:php8.2-apache
-    container_name: ${wp_container_name}
-    restart: unless-stopped
-    depends_on:
-      - wp-db
-    environment:
-      WORDPRESS_DB_HOST: wp-db:3306
-      WORDPRESS_DB_NAME: ${wp_db_name}
-      WORDPRESS_DB_USER: ${wp_db_user}
-      WORDPRESS_DB_PASSWORD: ${wp_db_password}
-    volumes:
-      - ${volume_path}
-      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
-    networks:
-      - wp_network
+    wordpress:
+        image: wordpress:php8.2-apache
+        container_name: ${wp_container_name}
+        restart: unless-stopped
+        depends_on:
+            - wp-db
+        environment:
+            WORDPRESS_DB_HOST: wp-db:3306
+            WORDPRESS_DB_NAME: ${wp_db_name}
+            WORDPRESS_DB_USER: ${wp_db_user}
+            WORDPRESS_DB_PASSWORD: ${wp_db_password}
+        volumes:
+            - ${volume_path}
+            - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+        networks:
+            - wp_network
 
 networks:
-  wp_network:
-    name: ${wp_network_name}
-    driver: bridge
+    wp_network:
+        name: ${wp_network_name}
+        driver: bridge
 EOF
 
-    # Criar configuração PHP otimizada
-    log_info "Criando configurações PHP otimizadas..."
+        if [ ! -f "$wp_compose_file" ]; then
+                log_error "Arquivo docker-compose.yml não foi criado corretamente em $domain_path."
+                return 1
+        fi
+        log_info "Arquivo docker-compose.yml criado: $wp_compose_file"
+
+        # Criar configuração PHP otimizada
+        log_info "Criando configurações PHP otimizadas..."
     cat > "$domain_path/php-custom.ini" <<'PHP_EOF'
 ; Configurações de Performance PHP
 memory_limit = 256M
