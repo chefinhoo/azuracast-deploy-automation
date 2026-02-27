@@ -1,437 +1,203 @@
 #!/bin/bash
 # =========================================================
-# Adicionar novo domínio (WordPress ou Site Estático)
+# Add Site - Versão Independente (Sem lib/common.sh)
 # =========================================================
 
 set -euo pipefail
 
-SCRIPT_FILE="${BASH_SOURCE[0]}"
-SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_FILE")" && pwd)"
+WEB_ROOT="/var/www"
 
-if [ ! -f "${SCRIPT_DIR}/lib/common.sh" ]; then
-    echo "[ERRO] Biblioteca comum não encontrada: ${SCRIPT_DIR}/lib/common.sh" >&2
-    exit 1
-fi
+# =========================================================
+# Funções Utilitárias
+# =========================================================
 
-# shellcheck source=/dev/null
-source "${SCRIPT_DIR}/lib/common.sh"
-
-PROXY_DOMAIN=""
-PROXY_SCHEME="http"
-PROXY_FORWARD_HOST=""
-PROXY_FORWARD_PORT="80"
-
-connect_npm_to_network() {
-    local network_name="$1"
-    local backend_host="$2"
-    local backend_port="$3"
-
-    if ! docker ps --format '{{.Names}}' | grep -qx "nginx-proxy-manager"; then
-        log_warn "Container nginx-proxy-manager não encontrado. Conecte manualmente na rede $network_name"
-        return 0
-    fi
-
-    if docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' nginx-proxy-manager 2>/dev/null | grep -qx "$network_name"; then
-        log_success "NPM já conectado à rede: $network_name"
-    else
-        if docker network connect "$network_name" nginx-proxy-manager 2>/dev/null; then
-            log_success "NPM conectado à rede: $network_name"
-        else
-            log_warn "Falha ao conectar NPM na rede $network_name"
-            return 0
-        fi
-    fi
-
-    if docker exec nginx-proxy-manager sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://${backend_host}:${backend_port}" 2>/dev/null | grep -Eq '^(200|301|302)$'; then
-        log_success "Conectividade interna validada: ${backend_host}:${backend_port}"
-    else
-        log_warn "Não foi possível validar conectividade para ${backend_host}:${backend_port}"
-    fi
-
-    return 0
+generate_base_slug() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' \
+        | sed 's/[^a-z0-9]/-/g' \
+        | sed 's/--*/-/g' \
+        | sed 's/^-\|-$//g'
 }
 
+generate_unique_slug() {
+    local prefix="$1"
+    local base_slug="$2"
+    local slug="$base_slug"
+    local counter=1
+
+    while docker ps -a --format '{{.Names}}' | grep -qx "${prefix}-${slug}"; do
+        slug="${base_slug}-${counter}"
+        ((counter++))
+    done
+
+    echo "$slug"
+}
+
+generate_project_name() {
+    echo "proj-$(openssl rand -hex 4)"
+}
+
+ensure_directory_is_clean() {
+    local path="$1"
+
+    if [ -f "$path/docker-compose.yml" ]; then
+        echo "ERRO: Já existe um site configurado neste diretório:"
+        echo "$path"
+        exit 1
+    fi
+}
+
+# =========================================================
+# WordPress
+# =========================================================
+
 provision_wordpress() {
+
     local domain="$1"
-    local client_name="$2"
-    local subdirectory_name="$3"
+    local client="$2"
+    local subdir="$3"
 
-    # Geração de slug mais robusta: substitui tudo que não for letra/número por hífen
+    local base_slug
+    base_slug=$(generate_base_slug "$domain")
+
     local slug
-    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-    # Adiciona parte do timestamp para garantir unicidade se já existir container/rede igual
-    if docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}"; then
-        slug="${slug}-$(date +%s)"
-    fi
-    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
-    
-    log_info "Caminho do site: $domain_path"
-    
-    local wp_container_name="wp-app-${slug}"
-    local wp_db_container_name="wp-db-${slug}"
-    local wp_network_name="wp-${slug}-network"
-    local creds_file="$domain_path/wordpress-credentials.txt"
+    slug=$(generate_unique_slug "wp-app" "$base_slug")
 
-    local wp_db_name="wordpress"
-    local wp_db_user="wordpress"
-    local wp_db_password=""
-    local wp_db_root_password=""
+    local project_name
+    project_name=$(generate_project_name)
 
-    log_info "Provisionando WordPress para $domain"
-    
-    # Criar estrutura de diretórios
-    mkdir -p "$domain_path" "$domain_path/db_data"
-    
-    # Gerenciar usuário Filebrowser para o cliente
-    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
+    local domain_path="$WEB_ROOT/$client/$subdir"
 
-    if [ -f "$creds_file" ]; then
-        log_info "Credenciais existentes encontradas. Reutilizando..."
-        wp_db_name="$(grep '^WORDPRESS_DB_NAME=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
-        wp_db_user="$(grep '^WORDPRESS_DB_USER=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
-        wp_db_password="$(grep '^WORDPRESS_DB_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
-        wp_db_root_password="$(grep '^WORDPRESS_DB_ROOT_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+    ensure_directory_is_clean "$domain_path"
 
-        wp_db_name="${wp_db_name:-wordpress}"
-        wp_db_user="${wp_db_user:-wordpress}"
-    fi
+    mkdir -p "$domain_path/db_data"
 
-    if [ -z "$wp_db_password" ]; then
-        wp_db_password="$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)"
-    fi
+    local db_pass
+    db_pass=$(openssl rand -hex 12)
 
-    if [ -z "$wp_db_root_password" ]; then
-        wp_db_root_password="$(openssl rand -base64 48 | tr -d '=+/' | cut -c1-32)"
-    fi
-
-    # Volume path sempre aponta para o diretório atual
-    local volume_path="./:/var/www/html"
+    local root_pass
+    root_pass=$(openssl rand -hex 16)
 
     cat > "$domain_path/docker-compose.yml" <<EOF
 services:
-  wp-db:
+  db:
     image: mariadb:10.11
-    container_name: ${wp_db_container_name}
+    container_name: wp-db-${slug}
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
-      MYSQL_DATABASE: ${wp_db_name}
-      MYSQL_USER: ${wp_db_user}
-      MYSQL_PASSWORD: ${wp_db_password}
+      MYSQL_ROOT_PASSWORD: ${root_pass}
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: ${db_pass}
     volumes:
       - ./db_data:/var/lib/mysql
     networks:
-      - wp_network
+      - wp_net
 
   wordpress:
     image: wordpress:php8.2-apache
-    container_name: ${wp_container_name}
+    container_name: wp-app-${slug}
     restart: unless-stopped
     depends_on:
-      - wp-db
+      - db
     environment:
-      WORDPRESS_DB_HOST: wp-db:3306
-      WORDPRESS_DB_NAME: ${wp_db_name}
-      WORDPRESS_DB_USER: ${wp_db_user}
-      WORDPRESS_DB_PASSWORD: ${wp_db_password}
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${db_pass}
+      WORDPRESS_DB_NAME: wordpress
     volumes:
-      - ${volume_path}
-      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+      - ./:/var/www/html
     networks:
-      - wp_network
+      - wp_net
 
 networks:
-  wp_network:
-    name: ${wp_network_name}
+  wp_net:
+    name: wp-${slug}-network
     driver: bridge
 EOF
 
-    # Criar configuração PHP otimizada
-    cat > "$domain_path/php-custom.ini" <<'PHP_EOF'
-; Configurações de Performance PHP
-memory_limit = 256M
-upload_max_filesize = 64M
-post_max_size = 64M
-max_execution_time = 300
-max_input_time = 300
+    (cd "$domain_path" && docker compose -p "$project_name" up -d)
 
-; OPcache
-opcache.enable = 1
-opcache.memory_consumption = 128
-opcache.interned_strings_buffer = 8
-opcache.max_accelerated_files = 10000
-opcache.revalidate_freq = 2
-opcache.fast_shutdown = 1
-
-; Realpath Cache
-realpath_cache_size = 4096K
-realpath_cache_ttl = 600
-PHP_EOF
-
-    # Criar .htaccess otimizado no diretório raiz
-    local htaccess_path="$domain_path/.htaccess"
-    
-    cat > "$htaccess_path" <<'HTACCESS_EOF'
-# BEGIN WordPress Optimization
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml
-</IfModule>
-
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType image/jpg "access plus 1 year"
-    ExpiresByType image/jpeg "access plus 1 year"
-    ExpiresByType image/png "access plus 1 year"
-    ExpiresByType image/webp "access plus 1 year"
-    ExpiresByType text/css "access plus 1 month"
-    ExpiresByType application/javascript "access plus 1 month"
-    ExpiresByType image/x-icon "access plus 1 year"
-    ExpiresDefault "access plus 2 days"
-</IfModule>
-
-<IfModule mod_headers.c>
-    <FilesMatch "\\.(ico|jpe?g|png|gif|webp|css|js|woff2?)$">
-        Header set Cache-Control "max-age=31536000, public"
-    </FilesMatch>
-</IfModule>
-
-FileETag None
-# END WordPress Optimization
-
-# BEGIN WordPress
-<IfModule mod_rewrite.c>
-RewriteEngine On
-RewriteBase /
-RewriteRule ^index\\.php$ - [L]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . /index.php [L]
-</IfModule>
-# END WordPress
-HTACCESS_EOF
-
-    (cd "$domain_path" && docker compose up -d)
-
-    cat > "$creds_file" <<EOF
-CLIENT_NAME=${client_name}
-SUBDIRECTORY_NAME=${subdirectory_name}
-DOMAIN=${domain}
-WORDPRESS_URL=http://${domain}
-WORDPRESS_CONTAINER=${wp_container_name}
-WORDPRESS_DB_CONTAINER=${wp_db_container_name}
-WORDPRESS_NETWORK=${wp_network_name}
-WORDPRESS_PROXY_HOST=${wp_container_name}
-WORDPRESS_PROXY_PORT=80
-WORDPRESS_DB_NAME=${wp_db_name}
-WORDPRESS_DB_USER=${wp_db_user}
-WORDPRESS_DB_PASSWORD=${wp_db_password}
-WORDPRESS_DB_ROOT_PASSWORD=${wp_db_root_password}
-EOF
-
-    chmod 600 "$creds_file" || true
-
-
-
-    # Validação extra: checar se já existe proxy configurado para o domínio
-    if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
-        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. NÃO será sugerida sobrescrita. Configure manualmente se necessário."
-        PROXY_DOMAIN=""
-        PROXY_SCHEME=""
-        PROXY_FORWARD_HOST=""
-        PROXY_FORWARD_PORT=""
-    else
-        connect_npm_to_network "$wp_network_name" "$wp_container_name" "80"
-        PROXY_DOMAIN="$domain"
-        PROXY_SCHEME="http"
-        PROXY_FORWARD_HOST="$wp_container_name"
-        PROXY_FORWARD_PORT="80"
-    fi
-
-    log_success "WordPress criado para $domain"
     echo ""
-    echo "Configuração no NPM:"
-    echo "  Domain Names: $domain"
-    echo "  Scheme: http"
-    echo "  Forward Hostname/IP: $wp_container_name"
-    echo "  Forward Port: 80"
+    echo "WordPress criado com sucesso!"
+    echo "Container: wp-app-${slug}"
+    echo "Projeto Docker: $project_name"
+    echo ""
 }
 
-provision_static_site() {
+# =========================================================
+# Site Estático
+# =========================================================
+
+provision_static() {
+
     local domain="$1"
-    local client_name="$2"
-    local subdirectory_name="$3"
+    local client="$2"
+    local subdir="$3"
 
-    # Geração de slug mais robusta para estáticos
+    local base_slug
+    base_slug=$(generate_base_slug "$domain")
+
     local slug
-    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-    if docker ps -a --format '{{.Names}}' | grep -q "site-app-${slug}"; then
-        slug="${slug}-$(date +%s)"
-    fi
-    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
-    
-    log_info "Caminho do site: $domain_path"
-    
-    local static_container_name="site-app-${slug}"
-    local static_network_name="site-${slug}-network"
+    slug=$(generate_unique_slug "site-app" "$base_slug")
 
-    log_info "Provisionando site estático para $domain"
-    
+    local project_name
+    project_name=$(generate_project_name)
+
+    local domain_path="$WEB_ROOT/$client/$subdir"
+
+    ensure_directory_is_clean "$domain_path"
+
     mkdir -p "$domain_path"
-    
-    # Gerenciar usuário Filebrowser para o cliente
-    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
 
-    local index_path="$domain_path/index.html"
-    
-    if [ ! -f "$index_path" ]; then
-        cat > "$index_path" <<EOF
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>$domain</title>
-</head>
-<body>
-  <h1>Site estático ativo</h1>
-  <p>Domínio: $domain</p>
-</body>
-</html>
+    cat > "$domain_path/index.html" <<EOF
+<h1>Site ativo</h1>
+<p>Domínio: $domain</p>
 EOF
-    fi
-
-    # Volume path sempre aponta para o diretório atual
-    local volume_path="./:/usr/share/nginx/html:ro"
 
     cat > "$domain_path/docker-compose.yml" <<EOF
 services:
   static:
     image: nginx:alpine
-    container_name: ${static_container_name}
+    container_name: site-app-${slug}
     restart: unless-stopped
     volumes:
-      - ${volume_path}
+      - ./:/usr/share/nginx/html:ro
     networks:
-      - static_network
+      - static_net
 
 networks:
-  static_network:
-    name: ${static_network_name}
+  static_net:
+    name: site-${slug}-network
     driver: bridge
 EOF
 
-    (cd "$domain_path" && docker compose up -d)
+    (cd "$domain_path" && docker compose -p "$project_name" up -d)
 
-
-
-    # Validação extra: checar se já existe proxy configurado para o domínio
-    if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
-        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. NÃO será sugerida sobrescrita. Configure manualmente se necessário."
-        PROXY_DOMAIN=""
-        PROXY_SCHEME=""
-        PROXY_FORWARD_HOST=""
-        PROXY_FORWARD_PORT=""
-    else
-        connect_npm_to_network "$static_network_name" "$static_container_name" "80"
-        PROXY_DOMAIN="$domain"
-        PROXY_SCHEME="http"
-        PROXY_FORWARD_HOST="$static_container_name"
-        PROXY_FORWARD_PORT="80"
-    fi
-
-    log_success "Site estático criado para $domain"
     echo ""
-    echo "Configuração no NPM:"
-    echo "  Domain Names: $domain"
-    echo "  Scheme: http"
-    echo "  Forward Hostname/IP: $static_container_name"
-    echo "  Forward Port: 80"
+    echo "Site estático criado com sucesso!"
+    echo "Container: site-app-${slug}"
+    echo "Projeto Docker: $project_name"
+    echo ""
 }
 
-main() {
-    init_logging || {
-        echo "[ERRO] Falha ao inicializar logging" >&2
-        exit 1
-    }
+# =========================================================
+# MAIN
+# =========================================================
 
-    load_config
+echo ""
+read -rp "Cliente: " client
+read -rp "Subdiretório: " subdir
+read -rp "Domínio: " domain
 
-    check_root || exit 1
-    check_distribution || exit 1
+echo ""
+echo "1) WordPress"
+echo "2) Site Estático"
+read -rp "Escolha [1-2]: " option
 
-    print_section "ADICIONAR NOVO SITE"
+case "$option" in
+    1) provision_wordpress "$domain" "$client" "$subdir" ;;
+    2) provision_static "$domain" "$client" "$subdir" ;;
+    *) echo "Opção inválida"; exit 1 ;;
+esac
 
-    # 1. Solicitar ou selecionar cliente
-    local client_name
-    client_name="$(prompt_client_name)"
-    
-    # 2. Solicitar nome do subdiretório
-    local subdirectory_name
-    subdirectory_name="$(prompt_subdirectory_name "$client_name")"
-    
-    # 3. Solicitar domínio
-    local domain
-    domain="$(prompt_domain)"
-    
-    # Confirmar estrutura
-    echo ""
-    log_info "Estrutura configurada:"
-    echo "  Cliente: $client_name"
-    echo "  Subdiretório: $subdirectory_name"
-    echo "  Domínio: $domain"
-    echo "  Caminho completo: $WEB_ROOT/$client_name/$subdirectory_name"
-    echo ""
-
-    echo "Escolha o modelo do site:"
-    echo "  1) WordPress"
-    echo "  2) Site estático"
-
-    local option=""
-    while true; do
-        read -rp "Opção [1-2]: " option
-        case "$option" in
-            1)
-                provision_wordpress "$domain" "$client_name" "$subdirectory_name"
-                break
-                ;;
-            2)
-                provision_static_site "$domain" "$client_name" "$subdirectory_name"
-                break
-                ;;
-            *)
-                log_warn "Opção inválida. Escolha 1 ou 2."
-                ;;
-        esac
-    done
-
-    echo ""
-    log_success "Configuração concluída."
-    print_section "CONFIGURAÇÃO FINAL DO PROXY (NPM)"
-    echo "  Domain Names: ${PROXY_DOMAIN}"
-    echo "  Scheme: ${PROXY_SCHEME}"
-    echo "  Forward Hostname/IP: ${PROXY_FORWARD_HOST}"
-    echo "  Forward Port: ${PROXY_FORWARD_PORT}"
-    echo ""
-
-    local filebrowser_creds_file="$WEB_ROOT/${client_name}/.filebrowser-credentials.txt"
-    if [ -f "$filebrowser_creds_file" ]; then
-        local fb_user=""
-        local fb_pass=""
-        fb_user="$(grep -E '^Usuário:' "$filebrowser_creds_file" | head -1 | cut -d: -f2- | xargs || true)"
-        fb_pass="$(grep -E '^Senha:' "$filebrowser_creds_file" | head -1 | cut -d: -f2- | xargs || true)"
-
-        print_section "CREDENCIAIS FILEBROWSER"
-        echo "  Usuário: ${fb_user:-$client_name}"
-        if [ -n "$fb_pass" ]; then
-            echo "  Senha: $fb_pass"
-        else
-            echo "  Senha: (não encontrada no arquivo)"
-        fi
-        echo "  Arquivo: $filebrowser_creds_file"
-        echo ""
-    fi
-
-    log_info "Depois, finalize SSL no Nginx Proxy Manager (Let's Encrypt + Force SSL)."
-}
-
-main "$@"
+echo "Concluído."
