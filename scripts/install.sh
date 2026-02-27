@@ -192,9 +192,9 @@ ensure_docker_daemon() {
     if ! docker_cli_ok; then
         log_error "Não foi possível iniciar o Docker daemon."
         log_info "Diagnóstico rápido do Docker:"
-        env -u DOCKER_HOST -u DOCKER_CONTEXT docker version 2>/dev/null || true
-        ls -l /run/docker.sock 2>/dev/null || true
-        ls -l /var/run/docker.sock 2>/dev/null || true
+        export wp_container_name="azuracast"
+        export wp_db_container_name="azuracast_db"
+        export wp_network_name="azuracast_network"
         if command_exists systemctl; then
             systemctl --no-pager --full status docker 2>/dev/null || true
         fi
