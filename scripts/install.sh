@@ -1385,114 +1385,6 @@ EOF
 # CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
-    local client_name="$1"
-    local subdirectory_name="$2"
-    local domain="$3"
-    # Checagem de variáveis obrigatórias antes de prosseguir
-    for var in client_name subdirectory_name domain; do
-        if [ -z "${!var:-}" ]; then
-            log_error "Variável obrigatória '$var' não definida. Abortando criação do vhost."
-            return 1
-        fi
-    done
-
-    # Slug único: client, subdir, domínio, timestamp se necessário, nunca reutiliza
-    local slug
-    slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
-    while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network" || { [ -d "$WEB_ROOT/www/$client_name/$subdirectory_name" ] && grep -q "^wp-app-${slug}$" <(docker ps -a --format '{{.Names}}'); }; do
-        slug="${slug}-$(date +%s)"
-        sleep 1
-    done
-    local wp_container_name="wp-app-${slug}"
-    local wp_db_container_name="wp-db-${slug}"
-    local wp_network_name="wp-${slug}-network"
-
-    # Verifica e remove containers antigos com o mesmo nome antes de criar novos
-    if docker ps -a --format '{{.Names}}' | grep -q "^${wp_container_name}$"; then
-        log_warn "Container antigo ${wp_container_name} encontrado. Removendo antes de criar novo."
-        docker rm -f "${wp_container_name}" || true
-    fi
-    if docker ps -a --format '{{.Names}}' | grep -q "^${wp_db_container_name}$"; then
-        log_warn "Container antigo ${wp_db_container_name} encontrado. Removendo antes de criar novo."
-        docker rm -f "${wp_db_container_name}" || true
-    fi
-    if docker network ls --format '{{.Name}}' | grep -q "^${wp_network_name}$"; then
-        log_warn "Rede antiga ${wp_network_name} encontrada. Removendo antes de criar nova."
-        docker network rm "${wp_network_name}" || true
-    fi
-
-    print_section "CONFIGURAÇÃO DE WORDPRESS"
-    # Confirmar estrutura
-    echo ""
-    log_info "Estrutura configurada:"
-    echo "  Cliente: $client_name"
-    echo "  Subdiretório: $subdirectory_name"
-    echo "  Domínio: $domain"
-    echo "  Caminho completo: $WEB_ROOT/www/$client_name/$subdirectory_name"
-    echo ""
-    
-    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
-    log_info "Criando estrutura em $domain_path"
-    # Limpa diretório antigo se existir para evitar resíduos e conflitos
-    if [ -d "$domain_path" ]; then
-        log_warn "Diretório $domain_path já existe. Removendo para evitar conflito."
-        rm -rf "$domain_path"
-    fi
-    mkdir -p "$domain_path" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
-    if [ ! -d "$domain_path" ]; then
-        log_error "Diretório $domain_path não foi criado corretamente."
-        return 1
-    fi
-    log_info "Diretório do site criado: $domain_path"
-    
-    # Gerenciar usuário Filebrowser para o cliente
-    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
-
-    local creds_file
-    creds_file="$domain_path/wordpress-credentials.txt"
-
-    local wp_db_name="wordpress"
-    local wp_db_user="wordpress"
-    local wp_db_password
-    local wp_db_root_password
-
-    if [ -f "$creds_file" ]; then
-        log_info "Credenciais existentes encontradas. Reutilizando para evitar conflito com banco persistente."
-
-        local loaded_db_name
-        local loaded_db_user
-        local loaded_db_password
-        local loaded_db_root_password
-
-        loaded_db_name="$(grep '^WORDPRESS_DB_NAME=' "$creds_file" | tail -1 | cut -d= -f2-)"
-        loaded_db_user="$(grep '^WORDPRESS_DB_USER=' "$creds_file" | tail -1 | cut -d= -f2-)"
-        loaded_db_password="$(grep '^WORDPRESS_DB_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2-)"
-        loaded_db_root_password="$(grep '^WORDPRESS_DB_ROOT_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2-)"
-
-        [ -n "$loaded_db_name" ] && wp_db_name="$loaded_db_name"
-        [ -n "$loaded_db_user" ] && wp_db_user="$loaded_db_user"
-        [ -n "$loaded_db_password" ] && wp_db_password="$loaded_db_password"
-        [ -n "$loaded_db_root_password" ] && wp_db_root_password="$loaded_db_root_password"
-    fi
-
-    if [ -z "${wp_db_password:-}" ]; then
-        wp_db_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
-    fi
-
-    if [ -z "${wp_db_root_password:-}" ]; then
-        wp_db_root_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
-    fi
-
-    # Volume path sempre aponta para o diretório atual
-    local volume_path="./:/var/www/html"
-
-    local wp_compose_file="$domain_path/docker-compose.yml"
-    # Garante que todas as variáveis usadas no YAML estão definidas
-    if [ -z "$wp_container_name" ] || [ -z "$wp_db_container_name" ] || [ -z "$wp_network_name" ]; then
-        log_error "Variáveis de container/network não definidas. Abortando geração do docker-compose.yml."
-        return 1
-    fi
-        cat > "$wp_compose_file" <<EOF
 services:
     wp-db:
         image: mariadb:10.11
@@ -1666,6 +1558,223 @@ EOF
 
     log_success "WordPress '$domain' configurado com sucesso."
     
+    # Salvar informações para display_summary (inclui o nome do container)
+    cat > /tmp/deployed_domain <<TMPEOF
+${domain}
+${client_name}
+${subdirectory_name}
+${wp_container_name}
+TMPEOF
+    return 0
+    local client_name="$1"
+    local subdirectory_name="$2"
+    local domain="$3"
+    # Checagem de variáveis obrigatórias antes de prosseguir
+    for var in client_name subdirectory_name domain; do
+        if [ -z "${!var:-}" ]; then
+            log_error "Variável obrigatória '$var' não definida. Abortando criação do vhost."
+            return 1
+        fi
+    done
+
+    # Slug robusto: só letras/números, hífen, e sempre único
+    local slug
+    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
+    if docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}"; then
+        slug="${slug}-$(date +%s)"
+    fi
+    local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
+
+    log_info "Caminho do site: $domain_path"
+
+    local wp_container_name="wp-app-${slug}"
+    local wp_db_container_name="wp-db-${slug}"
+    local wp_network_name="wp-${slug}-network"
+    local creds_file="$domain_path/wordpress-credentials.txt"
+
+    local wp_db_name="wordpress"
+    local wp_db_user="wordpress"
+    local wp_db_password=""
+    local wp_db_root_password=""
+
+    # Criar estrutura de diretórios
+    mkdir -p "$domain_path" "$domain_path/db_data"
+
+    # Gerenciar usuário Filebrowser para o cliente
+    manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
+
+    if [ -f "$creds_file" ]; then
+        log_info "Credenciais existentes encontradas. Reutilizando..."
+        wp_db_name="$(grep '^WORDPRESS_DB_NAME=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+        wp_db_user="$(grep '^WORDPRESS_DB_USER=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+        wp_db_password="$(grep '^WORDPRESS_DB_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+        wp_db_root_password="$(grep '^WORDPRESS_DB_ROOT_PASSWORD=' "$creds_file" | tail -1 | cut -d= -f2- || true)"
+
+        wp_db_name="${wp_db_name:-wordpress}"
+        wp_db_user="${wp_db_user:-wordpress}"
+    fi
+
+    if [ -z "$wp_db_password" ]; then
+        wp_db_password="$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)"
+    fi
+
+    if [ -z "$wp_db_root_password" ]; then
+        wp_db_root_password="$(openssl rand -base64 48 | tr -d '=+/' | cut -c1-32)"
+    fi
+
+    # Volume path sempre aponta para o diretório atual
+    local volume_path="./:/var/www/html"
+
+    cat > "$domain_path/docker-compose.yml" <<EOF
+services:
+  wp-db:
+    image: mariadb:10.11
+    container_name: ${wp_db_container_name}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${wp_db_root_password}
+      MYSQL_DATABASE: ${wp_db_name}
+      MYSQL_USER: ${wp_db_user}
+      MYSQL_PASSWORD: ${wp_db_password}
+    volumes:
+      - ./db_data:/var/lib/mysql
+    networks:
+      - wp_network
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    container_name: ${wp_container_name}
+    restart: unless-stopped
+    depends_on:
+      - wp-db
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_NAME: ${wp_db_name}
+      WORDPRESS_DB_USER: ${wp_db_user}
+      WORDPRESS_DB_PASSWORD: ${wp_db_password}
+    volumes:
+      - ${volume_path}
+      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+    networks:
+      - wp_network
+
+networks:
+  wp_network:
+    name: ${wp_network_name}
+    driver: bridge
+EOF
+
+    # Criar configuração PHP otimizada
+    cat > "$domain_path/php-custom.ini" <<'PHP_EOF'
+; Configurações de Performance PHP
+memory_limit = 256M
+upload_max_filesize = 64M
+post_max_size = 64M
+max_execution_time = 300
+max_input_time = 300
+
+; OPcache
+opcache.enable = 1
+opcache.memory_consumption = 128
+opcache.interned_strings_buffer = 8
+opcache.max_accelerated_files = 10000
+opcache.revalidate_freq = 2
+opcache.fast_shutdown = 1
+
+; Realpath Cache
+realpath_cache_size = 4096K
+realpath_cache_ttl = 600
+PHP_EOF
+
+    # Criar .htaccess otimizado no diretório raiz
+    local htaccess_path="$domain_path/.htaccess"
+    
+    cat > "$htaccess_path" <<'HTACCESS_EOF'
+# BEGIN WordPress Optimization
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresDefault "access plus 2 days"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\\.(ico|jpe?g|png|gif|webp|css|js|woff2?)$">
+        Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+</IfModule>
+
+FileETag None
+# END WordPress Optimization
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS_EOF
+
+    (cd "$domain_path" && docker compose up -d)
+
+    cat > "$creds_file" <<EOF
+CLIENT_NAME=${client_name}
+SUBDIRECTORY_NAME=${subdirectory_name}
+DOMAIN=${domain}
+WORDPRESS_URL=http://${domain}
+WORDPRESS_CONTAINER=${wp_container_name}
+WORDPRESS_DB_CONTAINER=${wp_db_container_name}
+WORDPRESS_NETWORK=${wp_network_name}
+WORDPRESS_PROXY_HOST=${wp_container_name}
+WORDPRESS_PROXY_PORT=80
+WORDPRESS_DB_NAME=${wp_db_name}
+WORDPRESS_DB_USER=${wp_db_user}
+WORDPRESS_DB_PASSWORD=${wp_db_password}
+WORDPRESS_DB_ROOT_PASSWORD=${wp_db_root_password}
+EOF
+
+    chmod 600 "$creds_file" || true
+
+    # Validação extra: checar se já existe proxy configurado para o domínio
+    if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
+        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. NÃO será sugerida sobrescrita. Configure manualmente se necessário."
+    else
+        if docker ps --format '{{.Names}}' | grep -qx "nginx-proxy-manager"; then
+            if docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' nginx-proxy-manager 2>/dev/null | grep -qx "$wp_network_name"; then
+                log_success "Nginx Proxy Manager já está conectado à rede do WordPress: $wp_network_name"
+            else
+                if docker network connect "$wp_network_name" nginx-proxy-manager 2>/dev/null; then
+                    log_success "Nginx Proxy Manager conectado à rede do WordPress: $wp_network_name"
+                else
+                    log_warn "Falha ao conectar Nginx Proxy Manager na rede $wp_network_name"
+                fi
+            fi
+
+            if docker exec nginx-proxy-manager sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://${wp_container_name}:80" 2>/dev/null | grep -Eq '^(200|301|302)$'; then
+                log_success "Conectividade interna NPM -> ${wp_container_name}:80 validada"
+            else
+                log_warn "Não foi possível validar conectividade NPM -> ${wp_container_name}:80"
+            fi
+        else
+            log_warn "Container nginx-proxy-manager não encontrado; conexão de rede do WordPress não aplicada."
+        fi
+    fi
+
+    log_success "WordPress '$domain' configurado com sucesso."
+
     # Salvar informações para display_summary (inclui o nome do container)
     cat > /tmp/deployed_domain <<TMPEOF
 ${domain}
