@@ -231,17 +231,21 @@ EOF
     chmod 600 "$creds_file" || true
 
 
+
     # Validação extra: checar se já existe proxy configurado para o domínio
     if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
-        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. Verifique conflitos antes de prosseguir."
+        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. NÃO será sugerida sobrescrita. Configure manualmente se necessário."
+        PROXY_DOMAIN=""
+        PROXY_SCHEME=""
+        PROXY_FORWARD_HOST=""
+        PROXY_FORWARD_PORT=""
+    else
+        connect_npm_to_network "$wp_network_name" "$wp_container_name" "80"
+        PROXY_DOMAIN="$domain"
+        PROXY_SCHEME="http"
+        PROXY_FORWARD_HOST="$wp_container_name"
+        PROXY_FORWARD_PORT="80"
     fi
-
-    connect_npm_to_network "$wp_network_name" "$wp_container_name" "80"
-
-    PROXY_DOMAIN="$domain"
-    PROXY_SCHEME="http"
-    PROXY_FORWARD_HOST="$wp_container_name"
-    PROXY_FORWARD_PORT="80"
 
     log_success "WordPress criado para $domain"
     echo ""
@@ -319,17 +323,21 @@ EOF
     (cd "$domain_path" && docker compose up -d)
 
 
+
     # Validação extra: checar se já existe proxy configurado para o domínio
     if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
-        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. Verifique conflitos antes de prosseguir."
+        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. NÃO será sugerida sobrescrita. Configure manualmente se necessário."
+        PROXY_DOMAIN=""
+        PROXY_SCHEME=""
+        PROXY_FORWARD_HOST=""
+        PROXY_FORWARD_PORT=""
+    else
+        connect_npm_to_network "$static_network_name" "$static_container_name" "80"
+        PROXY_DOMAIN="$domain"
+        PROXY_SCHEME="http"
+        PROXY_FORWARD_HOST="$static_container_name"
+        PROXY_FORWARD_PORT="80"
     fi
-
-    connect_npm_to_network "$static_network_name" "$static_container_name" "80"
-
-    PROXY_DOMAIN="$domain"
-    PROXY_SCHEME="http"
-    PROXY_FORWARD_HOST="$static_container_name"
-    PROXY_FORWARD_PORT="80"
 
     log_success "Site estático criado para $domain"
     echo ""
