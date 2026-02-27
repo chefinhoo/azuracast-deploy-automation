@@ -1395,33 +1395,33 @@ create_vhost() {
             return 1
         fi
     done
-        # Verifica e remove containers antigos com o mesmo nome antes de criar novos
-        if docker ps -a --format '{{.Names}}' | grep -q "^${wp_container_name}$"; then
-            log_warn "Container antigo ${wp_container_name} encontrado. Removendo antes de criar novo."
-            docker rm -f "${wp_container_name}" || true
-        fi
-        if docker ps -a --format '{{.Names}}' | grep -q "^${wp_db_container_name}$"; then
-            log_warn "Container antigo ${wp_db_container_name} encontrado. Removendo antes de criar novo."
-            docker rm -f "${wp_db_container_name}" || true
-        fi
-        if docker network ls --format '{{.Name}}' | grep -q "^${wp_network_name}$"; then
-            log_warn "Rede antiga ${wp_network_name} encontrada. Removendo antes de criar nova."
-            docker network rm "${wp_network_name}" || true
-        fi
+
+    # Slug único: client, subdir, domínio, timestamp se necessário, nunca reutiliza
+    local slug
+    slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
+    while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network" || { [ -d "$WEB_ROOT/www/$client_name/$subdirectory_name" ] && grep -q "^wp-app-${slug}$" <(docker ps -a --format '{{.Names}}'); }; do
+        slug="${slug}-$(date +%s)"
+        sleep 1
+    done
+    local wp_container_name="wp-app-${slug}"
+    local wp_db_container_name="wp-db-${slug}"
+    local wp_network_name="wp-${slug}-network"
+
+    # Verifica e remove containers antigos com o mesmo nome antes de criar novos
+    if docker ps -a --format '{{.Names}}' | grep -q "^${wp_container_name}$"; then
+        log_warn "Container antigo ${wp_container_name} encontrado. Removendo antes de criar novo."
+        docker rm -f "${wp_container_name}" || true
+    fi
+    if docker ps -a --format '{{.Names}}' | grep -q "^${wp_db_container_name}$"; then
+        log_warn "Container antigo ${wp_db_container_name} encontrado. Removendo antes de criar novo."
+        docker rm -f "${wp_db_container_name}" || true
+    fi
+    if docker network ls --format '{{.Name}}' | grep -q "^${wp_network_name}$"; then
+        log_warn "Rede antiga ${wp_network_name} encontrada. Removendo antes de criar nova."
+        docker network rm "${wp_network_name}" || true
+    fi
+
     print_section "CONFIGURAÇÃO DE WORDPRESS"
-    
-    # 1. Solicitar ou selecionar cliente
-    local client_name
-    client_name="$(prompt_client_name)"
-    
-    # 2. Solicitar nome do subdiretório
-    local subdirectory_name
-    subdirectory_name="$(prompt_subdirectory_name "$client_name")"
-    
-    # 3. Solicitar domínio
-    local domain
-    domain="$(prompt_domain)"
-    
     # Confirmar estrutura
     echo ""
     log_info "Estrutura configurada:"
@@ -1430,17 +1430,6 @@ create_vhost() {
     echo "  Domínio: $domain"
     echo "  Caminho completo: $WEB_ROOT/www/$client_name/$subdirectory_name"
     echo ""
-    
-    # Slug único: client, subdir, domínio, timestamp se necessário, nunca reutiliza
-    local slug
-    slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
-    while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network" || [ -d "$WEB_ROOT/www/$client_name/$subdirectory_name" ] && grep -q "^wp-app-${slug}$" <(docker ps -a --format '{{.Names}}'); do
-        slug="${slug}-$(date +%s)"
-        sleep 1
-    done
-    wp_container_name="wp-app-${slug}"
-    wp_db_container_name="wp-db-${slug}"
-    wp_network_name="wp-${slug}-network"
     
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     log_info "Criando estrutura em $domain_path"
