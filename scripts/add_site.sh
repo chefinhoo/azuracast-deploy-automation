@@ -55,8 +55,14 @@ provision_wordpress() {
     local domain="$1"
     local client_name="$2"
     local subdirectory_name="$3"
-    
-    local slug="${domain//./-}"
+
+    # Geração de slug mais robusta: substitui tudo que não for letra/número por hífen
+    local slug
+    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    # Adiciona parte do timestamp para garantir unicidade se já existir container/rede igual
+    if docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}"; then
+        slug="${slug}-$(date +%s)"
+    fi
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
     log_info "Caminho do site: $domain_path"
@@ -224,6 +230,12 @@ EOF
 
     chmod 600 "$creds_file" || true
 
+
+    # Validação extra: checar se já existe proxy configurado para o domínio
+    if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
+        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. Verifique conflitos antes de prosseguir."
+    fi
+
     connect_npm_to_network "$wp_network_name" "$wp_container_name" "80"
 
     PROXY_DOMAIN="$domain"
@@ -244,8 +256,13 @@ provision_static_site() {
     local domain="$1"
     local client_name="$2"
     local subdirectory_name="$3"
-    
-    local slug="${domain//./-}"
+
+    # Geração de slug mais robusta para estáticos
+    local slug
+    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    if docker ps -a --format '{{.Names}}' | grep -q "site-app-${slug}"; then
+        slug="${slug}-$(date +%s)"
+    fi
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
     log_info "Caminho do site: $domain_path"
@@ -300,6 +317,12 @@ networks:
 EOF
 
     (cd "$domain_path" && docker compose up -d)
+
+
+    # Validação extra: checar se já existe proxy configurado para o domínio
+    if docker exec nginx-proxy-manager sqlite3 /data/database.sqlite "SELECT id FROM proxy_host WHERE domain_names LIKE '%$domain%'" 2>/dev/null | grep -q .; then
+        log_warn "Já existe configuração de proxy para o domínio $domain no Nginx Proxy Manager. Verifique conflitos antes de prosseguir."
+    fi
 
     connect_npm_to_network "$static_network_name" "$static_container_name" "80"
 
