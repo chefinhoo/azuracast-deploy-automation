@@ -1385,6 +1385,19 @@ EOF
 # CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
+        # Verifica e remove containers antigos com o mesmo nome antes de criar novos
+        if docker ps -a --format '{{.Names}}' | grep -q "^${wp_container_name}$"; then
+            log_warn "Container antigo ${wp_container_name} encontrado. Removendo antes de criar novo."
+            docker rm -f "${wp_container_name}" || true
+        fi
+        if docker ps -a --format '{{.Names}}' | grep -q "^${wp_db_container_name}$"; then
+            log_warn "Container antigo ${wp_db_container_name} encontrado. Removendo antes de criar novo."
+            docker rm -f "${wp_db_container_name}" || true
+        fi
+        if docker network ls --format '{{.Name}}' | grep -q "^${wp_network_name}$"; then
+            log_warn "Rede antiga ${wp_network_name} encontrada. Removendo antes de criar nova."
+            docker network rm "${wp_network_name}" || true
+        fi
     print_section "CONFIGURAÇÃO DE WORDPRESS"
     
     # 1. Solicitar ou selecionar cliente
@@ -1427,6 +1440,11 @@ create_vhost() {
         rm -rf "$domain_path"
     fi
     mkdir -p "$domain_path" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
+    if [ ! -d "$domain_path" ]; then
+        log_error "Diretório $domain_path não foi criado corretamente."
+        return 1
+    fi
+    log_info "Diretório do site criado: $domain_path"
     
     # Gerenciar usuário Filebrowser para o cliente
     manage_filebrowser_user "$client_name" "${CLIENT_IS_NEW:-true}"
@@ -1471,6 +1489,11 @@ create_vhost() {
 
     local wp_compose_file="$domain_path/docker-compose.yml"
     cat > "$wp_compose_file" <<EOF || { log_error "Falha ao criar docker-compose do WordPress"; return 1; }
+    if [ ! -f "$wp_compose_file" ]; then
+        log_error "Arquivo docker-compose.yml não foi criado corretamente em $domain_path."
+        return 1
+    fi
+    log_info "Arquivo docker-compose.yml criado: $wp_compose_file"
 services:
   wp-db:
     image: mariadb:10.11
@@ -1591,7 +1614,7 @@ HTACCESS_EOF
 
     log_success "Configurações otimizadas criadas"
 
-    log_info "Iniciando stack WordPress..."
+    log_info "Iniciando stack WordPress em $domain_path..."
     if ! (cd "$domain_path" && docker compose up -d); then
         log_error "Falha ao iniciar stack WordPress"
         return 1
