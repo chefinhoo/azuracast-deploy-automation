@@ -74,6 +74,11 @@ provision_wordpress() {
       done
 
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
+    # Limpa diretório antigo se existir para evitar resíduos e conflitos
+    if [ -d "$domain_path" ]; then
+      log_warn "Diretório $domain_path já existe. Removendo para evitar conflito."
+      rm -rf "$domain_path"
+    fi
     mkdir -p "$domain_path" "$domain_path/db_data"
 
     local wp_container_name="wp-app-${slug}"
@@ -201,6 +206,11 @@ provision_static_site() {
       done
 
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
+    # Limpa diretório antigo se existir para evitar resíduos e conflitos
+    if [ -d "$domain_path" ]; then
+      log_warn "Diretório $domain_path já existe. Removendo para evitar conflito."
+      rm -rf "$domain_path"
+    fi
     mkdir -p "$domain_path"
 
     local static_container_name="site-app-${slug}"

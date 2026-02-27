@@ -1408,9 +1408,10 @@ create_vhost() {
     echo "  Caminho completo: $WEB_ROOT/www/$client_name/$subdirectory_name"
     echo ""
     
-    # Slug único: client, subdir, domínio, timestamp só se necessário
+    # Slug único: client, subdir, domínio, timestamp se necessário, nunca reutiliza
+    local slug
     slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
-    while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network"; do
+    while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network" || [ -d "$WEB_ROOT/www/$client_name/$subdirectory_name" ] && grep -q "^wp-app-${slug}$" <(docker ps -a --format '{{.Names}}'); do
         slug="${slug}-$(date +%s)"
         sleep 1
     done
@@ -1419,10 +1420,12 @@ create_vhost() {
     wp_network_name="wp-${slug}-network"
     
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
-    
     log_info "Criando estrutura em $domain_path"
-    
-    # Criar estrutura de diretórios
+    # Limpa diretório antigo se existir para evitar resíduos e conflitos
+    if [ -d "$domain_path" ]; then
+        log_warn "Diretório $domain_path já existe. Removendo para evitar conflito."
+        rm -rf "$domain_path"
+    fi
     mkdir -p "$domain_path" "$domain_path/db_data" || { log_error "Falha ao criar diretório"; return 1; }
     
     # Gerenciar usuário Filebrowser para o cliente
