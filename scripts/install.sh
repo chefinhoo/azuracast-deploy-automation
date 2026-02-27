@@ -1385,6 +1385,13 @@ EOF
 # CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
+            # Checagem de variáveis obrigatórias antes de prosseguir
+            for var in client_name subdirectory_name domain wp_container_name wp_db_container_name wp_network_name; do
+                if [ -z "${!var:-}" ]; then
+                    log_error "Variável obrigatória '$var' não definida. Abortando criação do vhost."
+                    return 1
+                fi
+            done
         # Verifica e remove containers antigos com o mesmo nome antes de criar novos
         if docker ps -a --format '{{.Names}}' | grep -q "^${wp_container_name}$"; then
             log_warn "Container antigo ${wp_container_name} encontrado. Removendo antes de criar novo."
@@ -1488,6 +1495,11 @@ create_vhost() {
     local volume_path="./:/var/www/html"
 
     local wp_compose_file="$domain_path/docker-compose.yml"
+    # Garante que todas as variáveis usadas no YAML estão definidas
+    if [ -z "$wp_container_name" ] || [ -z "$wp_db_container_name" ] || [ -z "$wp_network_name" ]; then
+        log_error "Variáveis de container/network não definidas. Abortando geração do docker-compose.yml."
+        return 1
+    fi
     cat > "$wp_compose_file" <<EOF || { log_error "Falha ao criar docker-compose do WordPress"; return 1; }
     if [ ! -f "$wp_compose_file" ]; then
         log_error "Arquivo docker-compose.yml não foi criado corretamente em $domain_path."
