@@ -1666,11 +1666,12 @@ EOF
 
     log_success "WordPress '$domain' configurado com sucesso."
     
-    # Salvar informações para display_summary
+    # Salvar informações para display_summary (inclui o nome do container)
     cat > /tmp/deployed_domain <<TMPEOF
 ${domain}
 ${client_name}
 ${subdirectory_name}
+${wp_container_name}
 TMPEOF
     return 0
 }
@@ -1682,18 +1683,20 @@ display_summary() {
     local domain=""
     local client_name=""
     local subdirectory_name=""
-    
+    local wp_container_name=""
+
     if [ -f /tmp/deployed_domain ]; then
         domain=$(sed -n '1p' /tmp/deployed_domain 2>/dev/null || echo "")
         client_name=$(sed -n '2p' /tmp/deployed_domain 2>/dev/null || echo "")
         subdirectory_name=$(sed -n '3p' /tmp/deployed_domain 2>/dev/null || echo "")
+        wp_container_name=$(sed -n '4p' /tmp/deployed_domain 2>/dev/null || echo "")
     fi
-    
+
     local public_ip
     public_ip="$(get_public_ip)"
-    
+
     print_info_box "✓ INSTALAÇÃO CONCLUÍDA COM SUCESSO"
-    
+
     if [ -n "$domain" ]; then
         echo "📝 WordPress: $domain"
         echo "   Cliente: $client_name"
@@ -1703,7 +1706,7 @@ display_summary() {
         echo "   Proxy interno: $wp_container_name:80 (sem porta pública)"
         echo
     fi
-    
+
     echo "🌐 Nginx Proxy Manager"
     echo "   URL: http://$public_ip:$NPM_ADMIN_PORT"
     echo "   Login padrão: admin@example.com / changeme"
