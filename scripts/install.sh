@@ -1385,13 +1385,16 @@ EOF
 # CONFIGURAR WORDPRESS
 # ==========================================================
 create_vhost() {
-            # Checagem de variáveis obrigatórias antes de prosseguir
-            for var in client_name subdirectory_name domain wp_container_name wp_db_container_name wp_network_name; do
-                if [ -z "${!var:-}" ]; then
-                    log_error "Variável obrigatória '$var' não definida. Abortando criação do vhost."
-                    return 1
-                fi
-            done
+    local client_name="$1"
+    local subdirectory_name="$2"
+    local domain="$3"
+    # Checagem de variáveis obrigatórias antes de prosseguir
+    for var in client_name subdirectory_name domain; do
+        if [ -z "${!var:-}" ]; then
+            log_error "Variável obrigatória '$var' não definida. Abortando criação do vhost."
+            return 1
+        fi
+    done
         # Verifica e remove containers antigos com o mesmo nome antes de criar novos
         if docker ps -a --format '{{.Names}}' | grep -q "^${wp_container_name}$"; then
             log_warn "Container antigo ${wp_container_name} encontrado. Removendo antes de criar novo."
@@ -2003,7 +2006,18 @@ main() {
     
     # Criar vhost (opcional)
     if [ "${PROMPT_FOR_DOMAIN:-1}" = "1" ]; then
-        create_vhost || log_warn "Falha na criação do vhost, continuando..."
+        # Prompt para cliente, subdiretório e domínio ANTES de chamar create_vhost
+        local client_name
+        local subdirectory_name
+        local domain
+        client_name="$(prompt_client_name)"
+        subdirectory_name="$(prompt_subdirectory_name "$client_name")"
+        domain="$(prompt_domain)"
+        if [ -n "$client_name" ] && [ -n "$subdirectory_name" ] && [ -n "$domain" ]; then
+            create_vhost "$client_name" "$subdirectory_name" "$domain" || log_warn "Falha na criação do vhost, continuando..."
+        else
+            log_warn "Variáveis obrigatórias para criação do vhost não definidas. Pulando criação do vhost."
+        fi
     fi
     
     # Resumo final
