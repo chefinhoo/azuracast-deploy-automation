@@ -184,7 +184,7 @@ services:
 
   # PostfixAdmin - Painel de administração
   postfixadmin:
-    image: postfixadmin/postfixadmin:latest
+    image: ghcr.io/postfixadmin/postfixadmin:latest
     container_name: postfixadmin
     restart: unless-stopped
     ports:
