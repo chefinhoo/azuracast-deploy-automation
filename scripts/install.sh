@@ -1409,15 +1409,14 @@ create_vhost() {
     echo ""
     
     # Slug único: client, subdir, domínio, timestamp só se necessário
-    local slug
     slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
     while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network"; do
         slug="${slug}-$(date +%s)"
         sleep 1
     done
-    local wp_container_name="wp-app-${slug}"
-    local wp_db_container_name="wp-db-${slug}"
-    local wp_network_name="wp-${slug}-network"
+    wp_container_name="wp-app-${slug}"
+    wp_db_container_name="wp-db-${slug}"
+    wp_network_name="wp-${slug}-network"
     
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
