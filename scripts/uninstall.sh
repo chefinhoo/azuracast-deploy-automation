@@ -247,7 +247,10 @@ if command -v docker >/dev/null 2>&1; then
             docker ps -aq --filter "name=wp-db-" || true
         } | awk 'NF' | sort -u
     )
-
+    # Adicional: pega containers que começam com wp-, site-, filebrowser-, etc
+    mapfile -t extra_containers < <(docker ps -aq | xargs -r docker inspect --format '{{.Name}}' | grep -E '^/(wp-|site-|filebrowser-|proxy_manager|azuracast|mailserver|webmail)' | sed 's#^/##' | xargs -r docker ps -aq --filter name || true)
+    containers+=("${extra_containers[@]}")
+    containers=( $(printf "%s\n" "${containers[@]}" | sort -u) )
     if [ "${#containers[@]}" -gt 0 ]; then
         run_cmd docker stop "${containers[@]}" || true
         run_cmd docker rm -f "${containers[@]}" || true
@@ -256,7 +259,7 @@ if command -v docker >/dev/null 2>&1; then
     echo "[INFO] Removendo imagens principais do stack... / Removing stack primary images..."
     mapfile -t images < <(
         docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' 2>/dev/null | \
-            awk '/^(jc21\/nginx-proxy-manager|mariadb:10\.11|roundcube\/roundcubemail|filebrowser\/filebrowser|ghcr\.io\/docker-mailserver\/docker-mailserver|postfixadmin\/postfixadmin|wordpress:php8\.2-apache|nginx:latest)/{print $2}' | \
+            awk '/(jc21\/nginx-proxy-manager|mariadb:10\.|roundcube\/roundcubemail|filebrowser\/filebrowser|ghcr\.io\/docker-mailserver\/docker-mailserver|postfixadmin\/postfixadmin|wordpress:php|nginx:alpine|nginx:latest|azuracast|mailserver|proxy_manager|webmail|filemanager|site-app-|wp-app-|wp-db-|site-|filebrowser)/{print $2}' | \
             sort -u
     )
     if [ "${#images[@]}" -gt 0 ]; then
@@ -266,7 +269,7 @@ if command -v docker >/dev/null 2>&1; then
     echo "[INFO] Removendo redes Docker do stack... / Removing stack Docker networks..."
     mapfile -t networks < <(
         docker network ls --format '{{.Name}}' 2>/dev/null | \
-            grep -E '^(azuracast|proxy_manager|.*npm_network.*|webmail_network|filemanager_network|mailserver_network|wp-.*-network)$' || true
+            grep -E '^(azuracast|proxy_manager|.*npm_network.*|webmail_network|filemanager_network|mailserver_network|wp-.*-network|site-.*-network|filebrowser.*|azuracast.*|mailserver.*|webmail.*|proxy.*|wordpress.*)$' || true
     )
     if [ "${#networks[@]}" -gt 0 ]; then
         run_cmd docker network rm "${networks[@]}" || true
@@ -275,7 +278,7 @@ if command -v docker >/dev/null 2>&1; then
     echo "[INFO] Removendo volumes Docker do stack... / Removing stack Docker volumes..."
     mapfile -t volumes < <(
         docker volume ls --format '{{.Name}}' 2>/dev/null | \
-            grep -E '^(azuracast_|proxy_manager_|webmail_|mailserver_|filemanager_)' || true
+            grep -E '^(azuracast_|proxy_manager_|webmail_|mailserver_|filemanager_|wp-|site-|wordpress|filebrowser|azuracast|proxy|mailserver|webmail)' || true
     )
     if [ "${#volumes[@]}" -gt 0 ]; then
         run_cmd docker volume rm "${volumes[@]}" || true
@@ -297,27 +300,28 @@ run_cmd rm -f /tmp/deployed_services
 run_cmd rm -f /tmp/deployed_domain
 
 echo "[INFO] Removendo sites WordPress criados por este instalador... / Removing WordPress sites created by this installer..."
+
+echo "[INFO] Removendo sites WordPress criados por este instalador e quaisquer resíduos..."
 while IFS= read -r wp_creds; do
     wp_dir="$(dirname "$wp_creds")"
-    
-    # Remover arquivo de credenciais do Filebrowser se existir
     client_dir="$(dirname "$wp_dir")"
-    if [ -f "$client_dir/.filebrowser-credentials.txt" ]; then
-        if [ "$DRY_RUN" -eq 1 ]; then
-            echo "[DRY-RUN] rm -f $client_dir/.filebrowser-credentials.txt"
-        else
-            echo "[INFO] Removendo credenciais Filebrowser: $client_dir/.filebrowser-credentials.txt / Removing Filebrowser credentials: $client_dir/.filebrowser-credentials.txt"
-        fi
-        run_cmd rm -f "$client_dir/.filebrowser-credentials.txt"
-    fi
-    
+    # Remove credenciais do Filebrowser
+    [ -f "$client_dir/.filebrowser-credentials.txt" ] && run_cmd rm -f "$client_dir/.filebrowser-credentials.txt"
     run_cmd rm -rf "$wp_dir"
-
-    # Remover diretório do cliente se ficar vazio
+    # Remove docker-compose.yml, .env, php-custom.ini, .htaccess, etc
+    run_cmd rm -f "$wp_dir/docker-compose.yml" "$wp_dir/.env" "$wp_dir/php-custom.ini" "$wp_dir/.htaccess"
+    # Remove diretório do cliente se ficar vazio
     if [ -d "$client_dir" ] && [ -z "$(find "$client_dir" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
         run_cmd rm -rf "$client_dir"
     fi
 done < <(find /var -maxdepth 3 -type f -name wordpress-credentials.txt 2>/dev/null || true)
+
+# Remover quaisquer docker-compose.yml restantes criados por scripts
+find /var -type f -name docker-compose.yml -exec grep -lE '(wp-app-|site-app-|filebrowser|azuracast|proxy_manager|mailserver|webmail)' {} \; | while read -r compose_file; do
+    compose_dir="$(dirname "$compose_file")"
+    run_compose_down "$compose_dir"
+    run_cmd rm -rf "$compose_dir"
+done
 
 echo "[INFO] Removendo sites estáticos criados por este instalador... / Removing static sites created by this installer..."
 while IFS= read -r compose_file; do

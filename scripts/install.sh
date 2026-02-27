@@ -1408,10 +1408,16 @@ create_vhost() {
     echo "  Caminho completo: $WEB_ROOT/www/$client_name/$subdirectory_name"
     echo ""
     
-    local domain_slug="${domain//./-}"
-    local wp_container_name="wp-app-${domain_slug}"
-    local wp_db_container_name="wp-db-${domain_slug}"
-    local wp_network_name="wp-${domain_slug}-network"
+    # Slug único: client, subdir, domínio, timestamp só se necessário
+    local slug
+    slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
+    while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network"; do
+        slug="${slug}-$(date +%s)"
+        sleep 1
+    done
+    local wp_container_name="wp-app-${slug}"
+    local wp_db_container_name="wp-db-${slug}"
+    local wp_network_name="wp-${slug}-network"
     
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     
@@ -1664,7 +1670,7 @@ display_summary() {
         echo "   Subdiretório: $subdirectory_name"
         echo "   Diretório: $WEB_ROOT/www/$client_name/$subdirectory_name"
         echo "   Credenciais DB: $WEB_ROOT/$client_name/$subdirectory_name/wordpress-credentials.txt"
-        echo "   Proxy interno: wp-app-${domain//./-}:80 (sem porta pública)"
+        echo "   Proxy interno: $wp_container_name:80 (sem porta pública)"
         echo
     fi
     
@@ -1723,7 +1729,7 @@ display_summary() {
     if [ -n "$domain" ]; then
         echo "   📌 WordPress: $domain"
         echo "      Domain Names: $domain www.$domain"
-        echo "      Forward To: wp-app-${domain//./-}:80"
+        echo "      Forward To: $wp_container_name:80"
         echo "      ✓ Cache Assets, Block Common Exploits"
         echo ""
         echo "   📌 AzuraCast: radio.$domain"

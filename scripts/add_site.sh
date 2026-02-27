@@ -66,8 +66,12 @@ provision_wordpress() {
 
     # Slug + timestamp para garantir unicidade
     local slug
-    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-    slug="${slug}-$(date +%s)"
+      # Slug único: client, subdir, domínio, timestamp só se necessário
+      slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
+      while docker ps -a --format '{{.Names}}' | grep -q "wp-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "wp-${slug}-network"; do
+          slug="${slug}-$(date +%s)"
+          sleep 1
+      done
 
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     mkdir -p "$domain_path" "$domain_path/db_data"
@@ -190,8 +194,11 @@ provision_static_site() {
     local subdirectory_name="$3"
 
     local slug
-    slug=$(echo "$domain" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-    slug="${slug}-$(date +%s)"
+      slug=$(echo "${client_name}-${subdirectory_name}-${domain}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^\-|-$//g')
+      while docker ps -a --format '{{.Names}}' | grep -q "site-app-${slug}" || docker network ls --format '{{.Name}}' | grep -q "site-${slug}-network"; do
+          slug="${slug}-$(date +%s)"
+          sleep 1
+      done
 
     local domain_path="$WEB_ROOT/www/$client_name/$subdirectory_name"
     mkdir -p "$domain_path"
